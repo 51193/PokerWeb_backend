@@ -16,6 +16,9 @@ from YOLOv8v5Model import YOLOv8v5Detector  # 从YOLOv8Model模块中导入YOLOv
 from datasets.PokerCards.label_name import Label_list
 import numpy as np
 from PIL import Image
+import pymysql
+import jwt
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 CORS(app)
@@ -28,6 +31,25 @@ colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(cls_name
 
 model = YOLOv8v5Detector()  # 创建YOLOv8Detector对象
 model.load_model(abs_path("weights/best-yolov8n.pt", path_type="current"))  # 加载预训练的YOLOv8模型
+
+# MySQL 连接配置
+MYSQL_HOST = '127.0.0.1'
+MYSQL_USER = 'root'  # 替换为你的 MySQL 用户名
+MYSQL_PASSWORD = 'JASONyyx2002'  # 替换为你的 MySQL 密码
+MYSQL_DB = 'DC'  # 替换为你的数据库名称
+
+SECRET_KEY = "key"
+
+def get_mysql_connection():
+    return pymysql.connect(host=MYSQL_HOST, user=MYSQL_USER, password=MYSQL_PASSWORD, database=MYSQL_DB)
+
+
+# 检查数据库连接状态
+try:
+    connection1 = get_mysql_connection()
+    print("数据库连接成功！")
+except pymysql.Error as e:
+    print("数据库连接失败:", e)
 
 
 def frame_process(image):  # 定义帧处理函数，用于处理每一帧图像
@@ -50,6 +72,91 @@ def frame_process(image):  # 定义帧处理函数，用于处理每一帧图像
 @app.route('/')
 def hello_world():
     return 'Hello, World!'
+
+
+def create_token(username):
+    payload = {
+        'exp': datetime.utcnow() + timedelta(hours=1),  # 令牌有效期为1h
+        'iat': datetime.utcnow(),
+        'sub': username  # 通常 'sub' 表示 subject，即用户的唯一标识
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+    return token
+
+
+def verify_token(token):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        return payload['sub']
+    except jwt.ExpiredSignatureError:
+        return None  # Token has expired
+    except jwt.InvalidTokenError:
+        return None  # Token is invalid
+
+
+@app.route('/user/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        if username is None or password is None:
+            return jsonify({'error': '用户名和密码不能为空'}), 400
+        # 获取数据库连接
+        connection = get_mysql_connection()
+        cursor = connection.cursor()
+        # 执行 SQL 查询
+        cursor.execute("SELECT * FROM user WHERE username=%s AND password=%s", (username, password))
+        user = cursor.fetchone()
+
+        # 关闭游标和数据库连接
+        cursor.close()
+        connection.close()
+
+        # 判断是否查询到用户
+        if user:
+            token = create_token(username)
+            return jsonify({'message': '登录成功', 'token': token}), 200
+        else:
+            return jsonify({'error': '用户名或密码错误'}), 401
+    except Exception as e:
+        app.logger.error(f"数据库操作失败: {e}")
+        return jsonify({'error': '数据库操作失败'}), 500
+
+
+@app.route('/user/register', methods=['POST'])
+def register():
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        if username is None or password is None:
+            return jsonify({'error': '用户名和密码不能为空'}), 400
+
+        # 获取数据库连接
+        connection = get_mysql_connection()
+        cursor = connection.cursor()
+
+        # 检查用户名是否已经存在
+        cursor.execute("SELECT * FROM user WHERE username=%s", (username,))
+        existing_user = cursor.fetchone()
+        if existing_user:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': '用户名已存在'}), 409
+
+        # 执行 SQL 插入语句
+        cursor.execute("INSERT INTO user (username, password) VALUES (%s, %s)", (username, password))
+        connection.commit()
+
+        # 关闭游标和数据库连接
+        cursor.close()
+        connection.close()
+
+        return jsonify({'message': '注册成功'}), 201
+    except Exception as e:
+        app.logger.error(f"数据库操作失败: {e}")
+        return jsonify({'error': '数据库操作失败'}), 500
 
 
 @app.route("/detect", methods=["POST"])
