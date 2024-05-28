@@ -3,17 +3,18 @@ import io
 import tempfile
 import time
 
-from flask import Flask, jsonify, request, send_file, Response, after_this_request, request
+from flask import Flask, jsonify, send_file, request
 from flask_cors import CORS
 import random  # 导入random模块，用于生成随机数
 from QtFusion.config import QF_Config
 import cv2  # 导入OpenCV库，用于处理图像
-from QtFusion.utils import cv_imread, drawRectBox  # 从QtFusion库中导入cv_imread和drawRectBox函数，用于读取图像和绘制矩形框
+from QtFusion.utils import drawRectBox  # 从QtFusion库中导入cv_imread和drawRectBox函数，用于读取图像和绘制矩形框
 from QtFusion.path import abs_path
-from flask_socketio import send, SocketIO
+from flask_socketio import SocketIO
 
 from YOLOv8v5Model import YOLOv8v5Detector  # 从YOLOv8Model模块中导入YOLOv8Detector类，用于加载YOLOv8模型并进行目标检测
 from datasets.PokerCards.label_name import Label_list
+from datasets.SGS.label_name import Chinese_name_sgs
 import numpy as np
 from PIL import Image
 import pymysql
@@ -27,7 +28,7 @@ QF_Config.set_verbose(False)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 cls_name = Label_list  # 定义类名列表
-colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(cls_name))]  # 为每个目标类别生成一个随机颜色
+colors = [[random.randint(100, 255) for _ in range(3)] for _ in range(len(cls_name))]  # 为每个目标类别生成一个随机颜色
 
 model = YOLOv8v5Detector()  # 创建YOLOv8Detector对象
 model.load_model(abs_path("weights/best-yolov8n.pt", path_type="current"))  # 加载预训练的YOLOv8模型
@@ -39,6 +40,7 @@ MYSQL_PASSWORD = 'JASONyyx2002'  # 替换为你的 MySQL 密码
 MYSQL_DB = 'DC'  # 替换为你的数据库名称
 
 SECRET_KEY = "key"
+
 
 def get_mysql_connection():
     return pymysql.connect(host=MYSQL_HOST, user=MYSQL_USER, password=MYSQL_PASSWORD, database=MYSQL_DB)
@@ -66,6 +68,7 @@ def frame_process(image):  # 定义帧处理函数，用于处理每一帧图像
             label = '%s %.0f%%' % (name, conf * 100)  # 创建标签，包含类别名称和置信度
             # 画出检测到的目标物
             image = drawRectBox(image, bbox, alpha=0.2, addText=label, color=colors[cls_id])  # 在图像上绘制边界框和标签
+    else: return image
     return image
 
 
@@ -76,7 +79,7 @@ def hello_world():
 
 def create_token(username):
     payload = {
-        'exp': datetime.utcnow() + timedelta(hours=1),  # 令牌有效期为1h
+        'exp': datetime.utcnow() + timedelta(days=1),  # 令牌有效期为1d
         'iat': datetime.utcnow(),
         'sub': username  # 通常 'sub' 表示 subject，即用户的唯一标识
     }
@@ -92,6 +95,27 @@ def verify_token(token):
         return None  # Token has expired
     except jwt.InvalidTokenError:
         return None  # Token is invalid
+
+
+# 封装的令牌验证函数
+def get_username_from_token():
+    token = request.headers.get('Authorization')
+    if not token:
+        return None, jsonify({'error': '未提供令牌'}), 401
+    token = token.split(' ')[1]  # 移除 "Bearer " 前缀
+    username = verify_token(token)
+    if not username:
+        return None, jsonify({'error': '令牌无效或已过期'}), 401
+    return username, None, None
+
+
+@app.route('/change-model', methods=['POST'])
+def change_model():
+    name = request.json.get('name')
+    print(name)
+    model.load_model(abs_path(f"weights/{name}.pt", path_type="current"))
+    model.change_name(name)
+    return jsonify({'message': '模型切换成功'})
 
 
 @app.route('/user/login', methods=['POST'])
@@ -159,6 +183,69 @@ def register():
         return jsonify({'error': '数据库操作失败'}), 500
 
 
+@app.route('/user/info', methods=['GET'])
+def get_user_info():
+    try:
+        username, error_response, status_code = get_username_from_token()
+        if error_response:
+            return error_response, status_code
+        connection = get_mysql_connection()
+        cursor = connection.cursor()
+        cursor.execute("SELECT asset FROM user WHERE username = %s", (username,))
+        result = cursor.fetchone()
+        # 关闭游标和数据库连接
+        cursor.close()
+        connection.close()
+        if result:
+            asset = result[0]
+            return jsonify({'username': username, 'asset': asset}), 200
+        else:
+            return jsonify({'error': '未找到用户资产信息'}), 404
+    except Exception as e:
+        app.logger.error(f"获取用户信息失败: {e}")
+        return jsonify({'error': '获取用户信息失败'}), 500
+
+
+# 修改密码接口
+@app.route('/user/change-password', methods=['POST'])
+def change_password():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': '未提供令牌'}), 401
+    token = token.split(' ')[1]  # 移除 "Bearer " 前缀
+    username = verify_token(token)
+    if not username:
+        return jsonify({'error': '令牌无效或已过期'}), 401
+
+    data = request.get_json()
+    old_password = data.get('oldPassword')
+    new_password = data.get('newPassword')
+
+    if not old_password or not new_password:
+        return jsonify({'error': '旧密码和新密码不能为空'}), 400
+
+    connection = get_mysql_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("SELECT * FROM user WHERE username=%s AND password=%s", (username, old_password))
+        user = cursor.fetchone()
+
+        if not user:
+            return jsonify({'error': '旧密码错误'}), 400
+
+        cursor.execute("UPDATE user SET password=%s WHERE username=%s", (new_password, username))
+        connection.commit()
+        return jsonify({'message': '修改成功'}), 200
+
+    except Exception as e:
+        app.logger.error(f"修改密码失败: {e}")
+        return jsonify({'error': '数据库操作失败'}), 500
+    finally:
+        cursor.close()
+        connection.close()
+
+
 @app.route("/detect", methods=["POST"])
 def detect():
     # Check if a file is uploaded
@@ -172,7 +259,9 @@ def detect():
         return jsonify({"error": "No selected file"})
 
     # Read the uploaded image
-    image = cv2.imdecode(np.fromstring(file.read(), np.uint8), cv2.IMREAD_COLOR)
+    image_buffer = np.frombuffer(file.read(), dtype=np.uint8)
+    image = cv2.imdecode(image_buffer, cv2.IMREAD_COLOR)
+    # image = cv2.imdecode(np.fromstring(file.read(), np.uint8), cv2.IMREAD_COLOR)
 
     # Process the image and perform detection
     pre_img = model.preprocess(image)
@@ -197,6 +286,12 @@ def detect():
                 'class_id': cls_id,
                 'label': label
             })
+    else:
+        img_io = io.BytesIO()
+        img_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        img_pil.save(img_io, 'JPEG')
+        img_io.seek(0)
+        return send_file(img_io, mimetype='image/jpeg')
     return send_file(img_io, mimetype='image/jpeg')
     # return jsonify(detections=detections)
 
@@ -239,16 +334,6 @@ def detect_video():
         print(1)
     return send_file(output_temp_file.name, mimetype='video/mp4', as_attachment=True)
 
-
-# @app.after_request
-# def cleanup(response):
-#     temp_folder = 'temp'  # 临时文件夹的路径
-#     # 删除临时文件夹中的文件
-#     for file_name in os.listdir(temp_folder):
-#         file_path = os.path.join(temp_folder, file_name)
-#         os.remove(file_path)
-#     # 删除临时文件夹
-#     return response
 
 @app.route('/detectCam', methods=['POST'])
 def detect_cam():
@@ -363,39 +448,66 @@ def handle_image(message):
 
 # 返回实时图片
 @socketio.on('image')
+# def handle_image(message):
+#     global cool
+#     global count
+#     global discard
+#     global frame
+#     global timer
+#
+#     sid = request.sid
+#
+#     start_time = time.time()
+#     if sid not in receive:
+#         receive[sid] = start_time
+#     elif receive[sid] + receive_threshold > start_time:
+#         receive[sid] = start_time
+#         return
+#     else:
+#         receive[sid] = start_time
+#
+#     count += 1
+#
+#     if sid not in wait:
+#         wait[sid] = 0
+#
+#     if sid not in cooldown:
+#         cooldown[sid] = 0
+#
+#     cur_size = wait.get(sid)
+#     cur_cooldown = cooldown.get(sid)
+#     if cur_size > frame or cur_cooldown > start_time:
+#         discard += 1
+#         return
+#
+#     wait[sid] = wait[sid] + 1
+#     if isinstance(message, bytes):  # 检查消息是否为二进制
+#         # 将二进制数据转换为图像
+#         arr = np.frombuffer(message, np.uint8)
+#         image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+#         image = frame_process(image)
+#         _, buffer = cv2.imencode('.jpg', image)
+#         socketio.emit('processed', buffer.tobytes())
+#
+#     end_time = time.time()
+#     consume_time = end_time - start_time
+#     if consume_time > 0.4 and end_time - timer > 5:
+#         if frame > 1:
+#             frame -= 1
+#             timer = time.time()
+#         else:
+#             cooldown[sid] = start_time + cool
+#             cool += 1
+#         print(str(frame) + '-' + str(cool))
+#     elif consume_time < 0.4 and end_time - timer > 5:
+#         if frame < 2 <= cool:
+#             cool -= 1
+#         elif frame < 5:
+#             frame += 1
+#             timer = time.time()
+#         print(str(frame) + '-' + str(cool))
+#     wait[sid] = wait[sid] - 1
 def handle_image(message):
-    global cool
-    global count
-    global discard
-    global frame
-    global timer
-
-    sid = request.sid
-
-    start_time = time.time()
-    if sid not in receive:
-        receive[sid] = start_time
-    elif receive[sid] + receive_threshold > start_time:
-        receive[sid] = start_time
-        return
-    else:
-        receive[sid] = start_time
-
-    count += 1
-
-    if sid not in wait:
-        wait[sid] = 0
-
-    if sid not in cooldown:
-        cooldown[sid] = 0
-
-    cur_size = wait.get(sid)
-    cur_cooldown = cooldown.get(sid)
-    if cur_size > frame or cur_cooldown > start_time:
-        discard += 1
-        return
-
-    wait[sid] = wait[sid] + 1
     if isinstance(message, bytes):  # 检查消息是否为二进制
         # 将二进制数据转换为图像
         arr = np.frombuffer(message, np.uint8)
@@ -403,25 +515,6 @@ def handle_image(message):
         image = frame_process(image)
         _, buffer = cv2.imencode('.jpg', image)
         socketio.emit('processed', buffer.tobytes())
-
-    end_time = time.time()
-    consume_time = end_time - start_time
-    if consume_time > 0.4 and end_time - timer > 5:
-        if frame > 1:
-            frame -= 1
-            timer = time.time()
-        else:
-            cooldown[sid] = start_time + cool
-            cool += 1
-        print(str(frame) + '-' + str(cool))
-    elif consume_time < 0.4 and end_time - timer > 5:
-        if frame < 2 <= cool:
-            cool -= 1
-        elif frame < 5:
-            frame += 1
-            timer = time.time()
-        print(str(frame) + '-' + str(cool))
-    wait[sid] = wait[sid] - 1
 
 
 if __name__ == '__main__':

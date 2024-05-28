@@ -2,7 +2,8 @@
 import cv2  # 导入OpenCV库，用于处理图像和视频
 import torch
 from QtFusion.models import Detector, HeatmapGenerator  # 从QtFusion库中导入Detector抽象基类
-from datasets.PokerCards.label_name import Chinese_name  # 从datasets库中导入Chinese_name字典，用于获取类别的中文名称
+from datasets.PokerCards.label_name import Chinese_name_poker  # 从datasets库中导入Chinese_name字典，用于获取类别的中文名称
+from datasets.SGS.label_name import Chinese_name_sgs
 from ultralytics import YOLO  # 从ultralytics库中导入YOLO类，用于加载YOLO模型
 from ultralytics.utils.torch_utils import select_device  # 从ultralytics库中导入select_device函数，用于选择设备
 
@@ -41,7 +42,7 @@ class YOLOv8v5Detector(Detector):  # 定义YOLOv8Detector类，继承自Detector
         super().__init__(params)  # 调用父类的构造函数
         self.model = None
         self.img = None  # 初始化图像为None
-        self.names = list(Chinese_name.values())  # 获取所有类别的中文名称
+        self.names = list(Chinese_name_poker.values())  # 获取所有类别的中文名称
         self.params = params if params else ini_params  # 如果提供了参数则使用提供的参数，否则使用默认参数
 
         # 创建heatmap
@@ -53,13 +54,26 @@ class YOLOv8v5Detector(Detector):  # 定义YOLOv8Detector类，继承自Detector
         layer = list(self.model.model.children())[0][-3]
         self.heatmap.register_hook(reg_layer=layer)
         names_dict = self.model.names  # 获取类别名称字典
-        self.names = [Chinese_name[v] if v in Chinese_name else v for v in names_dict.values()]  # 将类别名称转换为中文
-        
+        self.names = [Chinese_name_poker[v] if v in Chinese_name_poker else v for v in
+                      names_dict.values()]  # 将类别名称转换为中文
+
         self.model(torch.zeros(1, 3, *[self.imgsz] * 2).to(self.device).
                    type_as(next(self.model.model.parameters())))  # 预热
         self.model(torch.rand(1, 3, *[self.imgsz] * 2).to(self.device).
                    type_as(next(self.model.model.parameters())))  # 预热
-        
+
+    def change_name(self, name):
+        if name == "sgs":
+            self.names = list(Chinese_name_sgs.values())
+            names_dict = self.model.names
+            self.names = [Chinese_name_sgs[v] if v in Chinese_name_sgs else v for v in
+                          names_dict.values()]
+        elif name == "poker":
+            self.names = list(Chinese_name_poker.values())
+            names_dict = self.model.names
+            self.names = [Chinese_name_poker[v] if v in Chinese_name_poker else v for v in
+                          names_dict.values()]
+
     def preprocess(self, img):  # 定义预处理方法
         self.img = img  # 保存原始图像
         return img  # 返回处理后的图像
