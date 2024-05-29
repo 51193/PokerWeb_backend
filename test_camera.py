@@ -10,7 +10,7 @@ from QtFusion.utils import drawRectBox, get_cls_color  # 从QtFusion库导入dra
 from PySide6 import QtWidgets, QtCore  # 导入PySide6库的QtWidgets和QtCore模块，用于创建GUI
 from QtFusion.path import abs_path
 from QtFusion.config import QF_Config
-from YOLOv8v5Model import YOLOv8v5Detector  # 从YOLOv8Model模块导入YOLOv8Detector类，用于物体检测
+from YOLOv8Model import YOLOv8Detector  # 从YOLOv8Model模块导入YOLOv8Detector类，用于物体检测
 from datasets.PokerCards.label_name import Label_list
 from PySide6.QtCore import QTimer
 from collections import Counter
@@ -396,7 +396,7 @@ def frame_process(image):  # 定义帧处理函数，用于处理每一帧图像
 
 cls_name = Label_list  # 定义类名列表
 
-model = YOLOv8v5Detector()  # 创建YOLOv8Detector对象
+model = YOLOv8Detector()  # 创建YOLOv8Detector对象
 model.load_model(abs_path("weights/best-yolov8n.pt", path_type="current"))  # 加载预训练的YOLOv8模型
 colors = get_cls_color(model.names)  # 获取类别颜色
 Card_record = []

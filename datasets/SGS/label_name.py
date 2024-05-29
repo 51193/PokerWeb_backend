@@ -22,4 +22,4 @@ https://www.zhihu.com/people/sixuwuxian
 """
 Chinese_name_sgs = {'0': "杀", '1': "闪"}
 
-Label_list = list(Chinese_name_sgs.values())
+Label_list_sgs = list(Chinese_name_sgs.values())

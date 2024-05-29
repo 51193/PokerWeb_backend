@@ -12,4 +12,4 @@ Chinese_name_poker = {'10C': "梅花10", '10D': "方块10", '10H': "红桃10", '
                       'KC': "梅花K", 'KD': "方块K", 'KH': "红桃K", 'KS': "黑桃K",
                       'QC': "梅花Q", 'QD': "方块Q", 'QH': "红桃Q", 'QS': "黑桃Q"}
 
-Label_list = list(Chinese_name_poker.values())
+Label_list_poker = list(Chinese_name_poker.values())

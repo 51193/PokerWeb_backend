@@ -1,0 +1,8 @@
+path: E:/DACHUANG/PokerCardDetection111/PokerCardDetection/datasets/sgs
+train: train/images/
+val: valid/images/
+test: test/images/
+nc: 2
+names:
+  0: 0
+  1: 1

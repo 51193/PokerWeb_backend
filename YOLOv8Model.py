@@ -37,7 +37,7 @@ def count_classes(det_info, class_names):
     return count_list  # 返回列表
 
 
-class YOLOv8v5Detector(Detector):  # 定义YOLOv8Detector类，继承自Detector类
+class YOLOv8Detector(Detector):  # 定义YOLOv8Detector类，继承自Detector类
     def __init__(self, params=None):  # 定义构造函数
         super().__init__(params)  # 调用父类的构造函数
         self.model = None

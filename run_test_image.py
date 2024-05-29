@@ -8,7 +8,7 @@ from QtFusion.widgets import QMainWindow  # 从QtFusion库中导入FBaseWindow�
 from QtFusion.utils import cv_imread, drawRectBox  # 从QtFusion库中导入cv_imread和drawRectBox函数，用于读取图像和绘制矩形框
 from PySide6 import QtWidgets, QtCore  # 导入PySide6库中的QtWidgets和QtCore模块，用于创建GUI
 from QtFusion.path import abs_path
-from YOLOv8v5Model import YOLOv8v5Detector  # 从YOLOv8Model模块中导入YOLOv8Detector类，用于加载YOLOv8模型并进行目标检测
+from YOLOv8Model import YOLOv8Detector  # 从YOLOv8Model模块中导入YOLOv8Detector类，用于加载YOLOv8模型并进行目标检测
 from datasets.PokerCards.label_name import Label_list
 
 QF_Config.set_verbose(False)
@@ -16,7 +16,7 @@ QF_Config.set_verbose(False)
 cls_name = Label_list  # 定义类名列表
 colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(cls_name))]  # 为每个目标类别生成一个随机颜色
 
-model = YOLOv8v5Detector()  # 创建YOLOv8Detector对象
+model = YOLOv8Detector()  # 创建YOLOv8Detector对象
 model.load_model(abs_path("weights/best-yolov8n.pt", path_type="current"))  # 加载预训练的YOLOv8模型
 
 

@@ -12,9 +12,9 @@ from QtFusion.utils import drawRectBox  # 从QtFusion库中导入cv_imread和dra
 from QtFusion.path import abs_path
 from flask_socketio import SocketIO
 
-from YOLOv8v5Model import YOLOv8v5Detector  # 从YOLOv8Model模块中导入YOLOv8Detector类，用于加载YOLOv8模型并进行目标检测
-from datasets.PokerCards.label_name import Label_list
-from datasets.SGS.label_name import Chinese_name_sgs
+from YOLOv8Model import YOLOv8Detector  # 从YOLOv8Model模块中导入YOLOv8Detector类，用于加载YOLOv8模型并进行目标检测
+from datasets.PokerCards.label_name import Label_list_poker
+from datasets.SGS.label_name import Label_list_sgs
 import numpy as np
 from PIL import Image
 import pymysql
@@ -27,10 +27,9 @@ app.config['JSON_AS_ASCII'] = False  # 禁止中文转义
 QF_Config.set_verbose(False)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-cls_name = Label_list  # 定义类名列表
-colors = [[random.randint(100, 255) for _ in range(3)] for _ in range(len(cls_name))]  # 为每个目标类别生成一个随机颜色
+colors = [[random.randint(100, 255) for _ in range(3)] for _ in range(len(Label_list_poker))]  # 为每个目标类别生成一个随机颜色
 
-model = YOLOv8v5Detector()  # 创建YOLOv8Detector对象
+model = YOLOv8Detector()  # 创建YOLOv8Detector对象
 model.load_model(abs_path("weights/best-yolov8n.pt", path_type="current"))  # 加载预训练的YOLOv8模型
 
 # MySQL 连接配置
@@ -40,6 +39,8 @@ MYSQL_PASSWORD = 'JASONyyx2002'  # 替换为你的 MySQL 密码
 MYSQL_DB = 'DC'  # 替换为你的数据库名称
 
 SECRET_KEY = "key"
+
+Game_List = ["sgs", "poker"]
 
 
 def get_mysql_connection():
@@ -68,7 +69,8 @@ def frame_process(image):  # 定义帧处理函数，用于处理每一帧图像
             label = '%s %.0f%%' % (name, conf * 100)  # 创建标签，包含类别名称和置信度
             # 画出检测到的目标物
             image = drawRectBox(image, bbox, alpha=0.2, addText=label, color=colors[cls_id])  # 在图像上绘制边界框和标签
-    else: return image
+    else:
+        return image
     return image
 
 
@@ -112,10 +114,17 @@ def get_username_from_token():
 @app.route('/change-model', methods=['POST'])
 def change_model():
     name = request.json.get('name')
-    print(name)
-    model.load_model(abs_path(f"weights/{name}.pt", path_type="current"))
-    model.change_name(name)
-    return jsonify({'message': '模型切换成功'})
+    if name in Game_List:
+        global colors
+        if name == "poker":
+            colors = [[random.randint(0, 155) for _ in range(3)] for _ in range(len(Label_list_poker))]
+        elif name == "sgs":
+            colors = [[random.randint(0, 100) for _ in range(3)] for _ in range(len(Label_list_sgs))]
+        model.load_model(abs_path(f"weights/{name}.pt", path_type="current"))
+        model.change_name(name)
+        return jsonify({'message': '模型切换成功'})
+    else:
+        return jsonify({'error': '目标不存在'})
 
 
 @app.route('/user/login', methods=['POST'])
@@ -154,6 +163,8 @@ def register():
         data = request.get_json()
         username = data.get('username')
         password = data.get('password')
+        phone = data.get('phone')
+        email = data.get('email')
         if username is None or password is None:
             return jsonify({'error': '用户名和密码不能为空'}), 400
 
@@ -170,7 +181,8 @@ def register():
             return jsonify({'error': '用户名已存在'}), 409
 
         # 执行 SQL 插入语句
-        cursor.execute("INSERT INTO user (username, password) VALUES (%s, %s)", (username, password))
+        cursor.execute("INSERT INTO user (username, password,phone,email) VALUES (%s, %s,%s,%s)",
+                       (username, password, phone, email))
         connection.commit()
 
         # 关闭游标和数据库连接
@@ -191,16 +203,17 @@ def get_user_info():
             return error_response, status_code
         connection = get_mysql_connection()
         cursor = connection.cursor()
-        cursor.execute("SELECT asset FROM user WHERE username = %s", (username,))
+        cursor.execute("SELECT phone,email,asset FROM user WHERE username = %s", (username,))
         result = cursor.fetchone()
         # 关闭游标和数据库连接
         cursor.close()
         connection.close()
         if result:
-            asset = result[0]
-            return jsonify({'username': username, 'asset': asset}), 200
+            phone, email, asset = result
+            # asset = result[2]
+            return jsonify({'username': username, 'phone': phone, 'email': email, 'asset': asset}), 200
         else:
-            return jsonify({'error': '未找到用户资产信息'}), 404
+            return jsonify({'error': '未找到用户信息'}), 404
     except Exception as e:
         app.logger.error(f"获取用户信息失败: {e}")
         return jsonify({'error': '获取用户信息失败'}), 500
@@ -209,14 +222,9 @@ def get_user_info():
 # 修改密码接口
 @app.route('/user/change-password', methods=['POST'])
 def change_password():
-    token = request.headers.get('Authorization')
-    if not token:
-        return jsonify({'error': '未提供令牌'}), 401
-    token = token.split(' ')[1]  # 移除 "Bearer " 前缀
-    username = verify_token(token)
-    if not username:
-        return jsonify({'error': '令牌无效或已过期'}), 401
-
+    username, error_response, status_code = get_username_from_token()
+    if error_response:
+        return error_response, status_code
     data = request.get_json()
     old_password = data.get('oldPassword')
     new_password = data.get('newPassword')
@@ -245,58 +253,7 @@ def change_password():
         cursor.close()
         connection.close()
 
-
-@app.route("/detect", methods=["POST"])
-def detect():
-    # Check if a file is uploaded
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"})
-
-    file = request.files['file']
-
-    # Check if the file is empty
-    if file.filename == '':
-        return jsonify({"error": "No selected file"})
-
-    # Read the uploaded image
-    image_buffer = np.frombuffer(file.read(), dtype=np.uint8)
-    image = cv2.imdecode(image_buffer, cv2.IMREAD_COLOR)
-    # image = cv2.imdecode(np.fromstring(file.read(), np.uint8), cv2.IMREAD_COLOR)
-
-    # Process the image and perform detection
-    pre_img = model.preprocess(image)
-    pred, superimposed_img = model.predict(pre_img)
-    det = pred[0]
-    detections = []
-    if det is not None and len(det):
-        det_info = model.postprocess(pred)
-        for info in det_info:
-            name, bbox, conf, cls_id = info['class_name'], info['bbox'], info['score'], info['class_id']
-            label = '%s %.0f%%' % (name, conf * 100)  # 创建标签，包含类别名称和置信度
-            # 画出检测到的目标物
-            image = drawRectBox(image, bbox, alpha=0.2, addText=label, color=colors[cls_id])  # 在图像上绘制边界框和标签
-            pil_img = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-            img_io = io.BytesIO()
-            pil_img.save(img_io, 'JPEG')
-            img_io.seek(0)
-            detections.append({
-                'class_name': name,
-                'bbox': bbox,
-                'confidence': conf,
-                'class_id': cls_id,
-                'label': label
-            })
-    else:
-        img_io = io.BytesIO()
-        img_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        img_pil.save(img_io, 'JPEG')
-        img_io.seek(0)
-        return send_file(img_io, mimetype='image/jpeg')
-    return send_file(img_io, mimetype='image/jpeg')
-    # return jsonify(detections=detections)
-
-
-@app.route('/detectVideo', methods=['POST'])
+@app.route('/detect/video', methods=['POST'])
 def detect_video():
     # 检查是否有文件在请求中
     if 'video' not in request.files:
@@ -335,7 +292,7 @@ def detect_video():
     return send_file(output_temp_file.name, mimetype='video/mp4', as_attachment=True)
 
 
-@app.route('/detectCam', methods=['POST'])
+@app.route('/detect/image', methods=['POST'])
 def detect_cam():
     # 从请求体中获取图像的Base64编码
     data = request.get_json()
