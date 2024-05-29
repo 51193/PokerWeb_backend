@@ -448,66 +448,38 @@ def handle_image(message):
 
 # 返回实时图片
 @socketio.on('image')
-# def handle_image(message):
-#     global cool
-#     global count
-#     global discard
-#     global frame
-#     global timer
-#
-#     sid = request.sid
-#
-#     start_time = time.time()
-#     if sid not in receive:
-#         receive[sid] = start_time
-#     elif receive[sid] + receive_threshold > start_time:
-#         receive[sid] = start_time
-#         return
-#     else:
-#         receive[sid] = start_time
-#
-#     count += 1
-#
-#     if sid not in wait:
-#         wait[sid] = 0
-#
-#     if sid not in cooldown:
-#         cooldown[sid] = 0
-#
-#     cur_size = wait.get(sid)
-#     cur_cooldown = cooldown.get(sid)
-#     if cur_size > frame or cur_cooldown > start_time:
-#         discard += 1
-#         return
-#
-#     wait[sid] = wait[sid] + 1
-#     if isinstance(message, bytes):  # 检查消息是否为二进制
-#         # 将二进制数据转换为图像
-#         arr = np.frombuffer(message, np.uint8)
-#         image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-#         image = frame_process(image)
-#         _, buffer = cv2.imencode('.jpg', image)
-#         socketio.emit('processed', buffer.tobytes())
-#
-#     end_time = time.time()
-#     consume_time = end_time - start_time
-#     if consume_time > 0.4 and end_time - timer > 5:
-#         if frame > 1:
-#             frame -= 1
-#             timer = time.time()
-#         else:
-#             cooldown[sid] = start_time + cool
-#             cool += 1
-#         print(str(frame) + '-' + str(cool))
-#     elif consume_time < 0.4 and end_time - timer > 5:
-#         if frame < 2 <= cool:
-#             cool -= 1
-#         elif frame < 5:
-#             frame += 1
-#             timer = time.time()
-#         print(str(frame) + '-' + str(cool))
-#     wait[sid] = wait[sid] - 1
 def handle_image(message):
+    global cool
+    global count
+    global discard
+    global frame
+    global timer
+
+    sid = request.sid
+
+    start_time = time.time()
+    if sid not in receive:
+        receive[sid] = start_time
+    elif receive[sid] + receive_threshold > start_time:
+        return
+    else:
+        receive[sid] = start_time
+
+    count += 1
+
+    if sid not in wait:
+        wait[sid] = 0
+
+    if sid not in cooldown:
+        cooldown[sid] = 0
+
+    cur_size = wait.get(sid)
+    cur_cooldown = cooldown.get(sid)
+    if cur_size > frame or cur_cooldown > start_time:
+        discard += 1
+        return
+
+    wait[sid] = wait[sid] + 1
     if isinstance(message, bytes):  # 检查消息是否为二进制
         # 将二进制数据转换为图像
         arr = np.frombuffer(message, np.uint8)
@@ -516,6 +488,34 @@ def handle_image(message):
         _, buffer = cv2.imencode('.jpg', image)
         socketio.emit('processed', buffer.tobytes())
 
+    end_time = time.time()
+    consume_time = end_time - start_time
+    if consume_time > 0.4 and end_time - timer > 5:
+        if frame > 1:
+            frame -= 1
+            timer = time.time()
+        else:
+            cooldown[sid] = start_time + cool
+            cool += 1
+        print(str(frame) + '-' + str(cool))
+    elif consume_time < 0.4 and end_time - timer > 5:
+        if frame < 2 <= cool:
+            cool -= 1
+        elif frame < 5:
+            frame += 1
+            timer = time.time()
+        print(str(frame) + '-' + str(cool))
+    wait[sid] = wait[sid] - 1
+
+# def handle_image(message):
+#     if isinstance(message, bytes):  # 检查消息是否为二进制
+#         # 将二进制数据转换为图像
+#         arr = np.frombuffer(message, np.uint8)
+#         image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+#         image = frame_process(image)
+#         _, buffer = cv2.imencode('.jpg', image)
+#         socketio.emit('processed', buffer.tobytes())
+#
 
 if __name__ == '__main__':
     app.run(debug=True)
