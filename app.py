@@ -1,5 +1,5 @@
 import base64
-import io
+import os
 import tempfile
 import time
 
@@ -16,7 +16,6 @@ from YOLOv8Model import YOLOv8Detector  # 从YOLOv8Model模块中导入YOLOv8Det
 from datasets.PokerCards.label_name import Label_list_poker
 from datasets.SGS.label_name import Label_list_sgs
 import numpy as np
-from PIL import Image
 import pymysql
 import jwt
 from datetime import datetime, timedelta
@@ -219,6 +218,49 @@ def get_user_info():
         return jsonify({'error': '获取用户信息失败'}), 500
 
 
+@app.route('/getGames', methods=['GET'])
+def get_games():
+    try:
+        # 获取分页参数
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('pageSize', 8))
+        offset = (page - 1) * page_size
+
+        connection = get_mysql_connection()
+        cursor = connection.cursor()
+        # 查询游戏列表
+        cursor.execute("SELECT name,url FROM games LIMIT %s OFFSET %s", (page_size, offset))
+        games = cursor.fetchall()
+        # 查询总游戏数量
+        cursor.execute("SELECT COUNT(*) FROM games")
+        total = cursor.fetchone()[0]
+        # 关闭游标和数据库连接
+        cursor.close()
+        connection.close()
+        # 假设你的图片存储在服务器的某个目录下，例如 '/path/to/images/'
+        image_directory = 'image/'
+        # 格式化游戏列表，并将图片文件读取为Base64编码
+        games_list = []
+        for game in games:
+            # 构建图片的完整路径
+            image_path = os.path.join(image_directory, f"{game[0]}.jpg")  # 假设图片文件扩展名为.jpg
+            # 读取图片文件并转换为Base64编码
+            with open(image_path, "rb") as image_file:
+                encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
+            # 添加到游戏列表
+            games_list.append({
+                'name': game[0],
+                'image': f"data:image/jpeg;base64,{encoded_image}",  # 假设MIME类型为image/jpeg
+                'url': game[1]
+            })
+
+        return jsonify({'games': games_list, 'total': total}), 200
+
+    except Exception as e:
+        app.logger.error(f"获取游戏列表失败: {e}")
+        return jsonify({'error': '获取游戏列表失败'}), 500
+
+
 # 修改密码接口
 @app.route('/user/change-password', methods=['POST'])
 def change_password():
@@ -252,6 +294,7 @@ def change_password():
     finally:
         cursor.close()
         connection.close()
+
 
 @app.route('/detect/video', methods=['POST'])
 def detect_video():
