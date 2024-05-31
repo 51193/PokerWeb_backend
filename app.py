@@ -1,8 +1,11 @@
 import base64
 import os
 import tempfile
+import threading
 import time
 import queue
+
+from queue import Empty
 
 from flask import Flask, jsonify, send_file, request
 from flask_cors import CORS
@@ -386,16 +389,6 @@ def detect_cam1():
     return card
 
 
-@socketio.on('connect')
-def handle_connect():
-    print('Client connected')
-
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    print('Client disconnected')
-
-
 # 返回字符串
 @socketio.on('image1')
 def handle_image(message):
@@ -418,86 +411,94 @@ def handle_image(message):
         socketio.emit('processed', card)
 
 
-realtimeStarter = dict()
-realtimeMessageQueue = dict()
-realtimeOnProcess = dict()
-realtimeMessageWindow = dict()
-realtimeWaitingQueue = dict()
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
 
 
-# 返回实时图片
+@socketio.on('disconnect')
+def handle_disconnect():
+    sid = request.sid
+    if sid in realtimeQueues:
+        realtimeQueues[sid].put(None)  # 发送停止信号
+        processingThreads[sid].join()
+        with locks[sid]:
+            del realtimeQueues[sid]
+            del processingThreads[sid]
+            del conditions[sid]
+    print('Client disconnected')
+
+
+# 使用Queue来存储每个sid的消息队列
+realtimeQueues = {}
+# 每个sid的处理线程
+processingThreads = {}
+# 条件变量和锁
+conditions = {}
+locks = {}
+
+
+def process_images(sid):
+    while True:
+        with conditions[sid]:
+            conditions[sid].wait_for(lambda: not realtimeQueues[sid].empty())  # 等待条件变量通知
+            try:
+                queue_size = realtimeQueues[sid].qsize()
+
+                if queue_size == 0:
+                    continue
+
+                # 确定抽取的索引
+                num_samples = 4
+                if queue_size >= num_samples:
+                    indexes = [int(queue_size * i / num_samples) for i in range(1, num_samples)]
+                else:
+                    indexes = list(range(queue_size))
+
+                selected_messages = []
+
+                # 抽取特定消息
+                for i in range(queue_size):
+                    message = realtimeQueues[sid].get_nowait()
+                    if message is None:
+                        # 清空队列，处理停止信号
+                        break
+                    if i in indexes:
+                        selected_messages.append(message)
+
+                # 处理并发送消息
+                for message in selected_messages:
+                    if message is None:
+                        break
+
+                    arr = np.frombuffer(message, dtype=np.uint8)
+                    image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                    if image is not None:
+                        image = frame_process(image)  # 假设frame_process是定义的处理函数
+                        _, buffer = cv2.imencode('.jpg', image)
+                        socketio.emit('processed', buffer.tobytes(), room=sid)
+                    else:
+                        print("Failed to decode image")
+
+            except Empty:
+                continue
+
+
 @socketio.on('image')
 def handle_image(message):
-    global realtimeMessageQueue
-
     sid = request.sid
+    if sid not in realtimeQueues:
+        # 创建新的线程、队列和条件变量
+        locks[sid] = threading.Lock()
+        conditions[sid] = threading.Condition(lock=locks[sid])  # 明确指定条件变量使用的锁
+        realtimeQueues[sid] = queue.Queue()
+        processingThreads[sid] = threading.Thread(target=process_images, args=(sid,))
+        processingThreads[sid].start()
 
-    start_time = time.time()
+    with conditions[sid]:  # 使用条件变量的锁来同步操作
+        realtimeQueues[sid].put(message)
+        conditions[sid].notify()  # 在持有锁的情况下通知
 
-    if sid not in realtimeMessageQueue:
-        realtimeMessageQueue[sid] = queue.Queue()
-
-    if sid not in realtimeOnProcess:
-        realtimeOnProcess[sid] = 0
-
-    if sid not in realtimeMessageWindow:
-        realtimeMessageWindow[sid] = 3
-
-    if sid not in realtimeWaitingQueue:
-        realtimeWaitingQueue[sid] = queue.Queue()
-
-    if sid not in realtimeStarter:
-        realtimeStarter[sid] = 0
-
-    if realtimeStarter[sid] != 0:
-
-        realtimeMessageQueue[sid].put(message)
-
-        if realtimeOnProcess[sid] > realtimeMessageWindow[sid] or realtimeWaitingQueue[sid].empty():
-            return
-
-        message = realtimeWaitingQueue[sid].get()
-
-    else:
-        realtimeStarter[sid] = 1
-
-    realtimeOnProcess[sid] += 1
-
-    if isinstance(message, bytes):  # 检查消息是否为二进制
-        # 将二进制数据转换为图像
-        arr = np.frombuffer(message, np.uint8)
-        image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-        image = frame_process(image)
-        _, buffer = cv2.imencode('.jpg', image)
-        socketio.emit('processed', buffer.tobytes())
-
-    realtimeOnProcess[sid] -= 1
-
-    while realtimeWaitingQueue[sid].qsize() + realtimeOnProcess[sid].qsize() < realtimeMessageWindow[sid]:
-        if (realtimeMessageQueue[sid].qsize() <= realtimeMessageWindow[sid] - realtimeOnProcess[sid] -
-                realtimeWaitingQueue[sid].qsize()):
-            while not realtimeMessageQueue[sid].empty():
-                realtimeWaitingQueue[sid].put(realtimeMessageQueue[sid].get())
-            break
-        else:
-            times = realtimeMessageQueue[sid].qsize() // (
-                    realtimeOnProcess[sid] + realtimeWaitingQueue[sid].qsize()) + 1
-            element_per_time = realtimeMessageQueue[sid].qsize() // times - 1
-            for i in range(times):
-                for j in range(element_per_time):
-                    realtimeMessageQueue[sid].get()
-                realtimeWaitingQueue[sid].put(realtimeMessageQueue[sid].get())
-
-
-# def handle_image(message):
-#     if isinstance(message, bytes):  # 检查消息是否为二进制
-#         # 将二进制数据转换为图像
-#         arr = np.frombuffer(message, np.uint8)
-#         image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-#         image = frame_process(image)
-#         _, buffer = cv2.imencode('.jpg', image)
-#         socketio.emit('processed', buffer.tobytes())
-#
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0')
