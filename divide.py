@@ -3,11 +3,11 @@ import shutil
 from sklearn.model_selection import train_test_split
 
 # 定义图像文件夹和标签文件夹路径
-image_folder = "E:\DACHUANG\sgs\images"
-label_folder = "E:\DACHUANG\sgs\labels"
+image_folder = "datasets\sgs\images"
+label_folder = "datasets\sgs\labels"
 
 # 定义保存划分后数据集的文件夹路径
-output_folder = "E:\DACHUANG\sgs"
+output_folder = "datasets\sgs"
 train_folder = os.path.join(output_folder, "train")
 test_folder = os.path.join(output_folder, "test")
 valid_folder = os.path.join(output_folder, "valid")

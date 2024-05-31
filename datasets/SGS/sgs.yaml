@@ -1,4 +1,4 @@
-path: E:/DACHUANG/PokerCardDetection111/PokerCardDetection/datasets/sgs
+path: E:/DACHUANG/new/PokerWeb_backend/datasets/SGS
 train: train/images/
 val: valid/images/
 test: test/images/

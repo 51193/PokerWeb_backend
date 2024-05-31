@@ -2,6 +2,7 @@ import base64
 import os
 import tempfile
 import time
+import queue
 
 from flask import Flask, jsonify, send_file, request
 from flask_cors import CORS
@@ -39,7 +40,7 @@ MYSQL_DB = 'DC'  # 替换为你的数据库名称
 
 SECRET_KEY = "key"
 
-Game_List = ["sgs", "poker"]
+Game_List = ["SGS", "poker"]
 
 
 def get_mysql_connection():
@@ -57,7 +58,7 @@ except pymysql.Error as e:
 def frame_process(image):  # 定义帧处理函数，用于处理每一帧图像
     # image = cv2.resize(image, (850, 500))  # 将图像的大小调整为850x500
     pre_img = model.preprocess(image)  # 对图像进行预处理
-    pred, superimposed_img = model.predict(pre_img)  # 使用模型进行预测
+    pred = model.predict(pre_img)  # 使用模型进行预测
     det = pred[0]  # 获取预测结果
     # 如果有检测信息则进入
     if det is not None and len(det):
@@ -117,7 +118,7 @@ def change_model():
         global colors
         if name == "poker":
             colors = [[random.randint(0, 155) for _ in range(3)] for _ in range(len(Label_list_poker))]
-        elif name == "sgs":
+        elif name == "SGS":
             colors = [[random.randint(0, 100) for _ in range(3)] for _ in range(len(Label_list_sgs))]
         model.load_model(abs_path(f"weights/{name}.pt", path_type="current"))
         model.change_name(name)
@@ -370,7 +371,7 @@ def detect_cam1():
     image_decoded = base64.b64decode(encoded)
     image = cv2.imdecode(np.frombuffer(image_decoded, np.uint8), cv2.IMREAD_COLOR)
     pre_img = model.preprocess(image)  # 对图像进行预处理
-    pred, superimposed_img = model.predict(pre_img)  # 使用模型进行预测
+    pred = model.predict(pre_img)  # 使用模型进行预测
     det = pred[0]  # 获取预测结果
     card = []
     # 如果有检测信息则进入
@@ -395,43 +396,15 @@ def handle_disconnect():
     print('Client disconnected')
 
 
-wait = dict()
-receive = dict()
-receive_threshold = 0.2
-cooldown = dict()
-cool = 1
-count = 1
-discard = 1
-frame = 5
-timer = time.time()
-
-
 # 返回字符串
 @socketio.on('image1')
 def handle_image(message):
-    global count
-    global discard
-    global frame
-    global timer
-
-    count += 1
-
-    sid = request.sid
-    if sid not in wait:
-        wait[sid] = 0
-
-    curSize = wait.get(sid)
-    if curSize > frame:
-        discard += 1
-        return
-
-    wait[sid] = wait[sid] + 1
     if isinstance(message, bytes):  # 检查消息是否为二进制
         # 将二进制数据转换为图像
         arr = np.frombuffer(message, np.uint8)
         image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         pre_img = model.preprocess(image)  # 对图像进行预处理
-        pred, superimposed_img = model.predict(pre_img)  # 使用模型进行预测
+        pred = model.predict(pre_img)  # 使用模型进行预测
         det = pred[0]  # 获取预测结果
         card = []
         # 如果有检测信息则进入
@@ -443,43 +416,53 @@ def handle_image(message):
                 if conf > 0.8:
                     card.append(name)
         socketio.emit('processed', card)
-    wait[sid] = wait[sid] - 1
+
+
+realtimeStarter = dict()
+realtimeMessageQueue = dict()
+realtimeOnProcess = dict()
+realtimeMessageWindow = dict()
+realtimeWaitingQueue = dict()
 
 
 # 返回实时图片
 @socketio.on('image')
 def handle_image(message):
-    global cool
-    global count
-    global discard
-    global frame
-    global timer
+    global realtimeMessageQueue
 
     sid = request.sid
 
     start_time = time.time()
-    if sid not in receive:
-        receive[sid] = start_time
-    elif receive[sid] + receive_threshold > start_time:
-        return
+
+    if sid not in realtimeMessageQueue:
+        realtimeMessageQueue[sid] = queue.Queue()
+
+    if sid not in realtimeOnProcess:
+        realtimeOnProcess[sid] = 0
+
+    if sid not in realtimeMessageWindow:
+        realtimeMessageWindow[sid] = 3
+
+    if sid not in realtimeWaitingQueue:
+        realtimeWaitingQueue[sid] = queue.Queue()
+
+    if sid not in realtimeStarter:
+        realtimeStarter[sid] = 0
+
+    if realtimeStarter[sid] != 0:
+
+        realtimeMessageQueue[sid].put(message)
+
+        if realtimeOnProcess[sid] > realtimeMessageWindow[sid] or realtimeWaitingQueue[sid].empty():
+            return
+
+        message = realtimeWaitingQueue[sid].get()
+
     else:
-        receive[sid] = start_time
+        realtimeStarter[sid] = 1
 
-    count += 1
+    realtimeOnProcess[sid] += 1
 
-    if sid not in wait:
-        wait[sid] = 0
-
-    if sid not in cooldown:
-        cooldown[sid] = 0
-
-    cur_size = wait.get(sid)
-    cur_cooldown = cooldown.get(sid)
-    if cur_size > frame or cur_cooldown > start_time:
-        discard += 1
-        return
-
-    wait[sid] = wait[sid] + 1
     if isinstance(message, bytes):  # 检查消息是否为二进制
         # 将二进制数据转换为图像
         arr = np.frombuffer(message, np.uint8)
@@ -488,24 +471,23 @@ def handle_image(message):
         _, buffer = cv2.imencode('.jpg', image)
         socketio.emit('processed', buffer.tobytes())
 
-    end_time = time.time()
-    consume_time = end_time - start_time
-    if consume_time > 0.4 and end_time - timer > 5:
-        if frame > 1:
-            frame -= 1
-            timer = time.time()
+    realtimeOnProcess[sid] -= 1
+
+    while realtimeWaitingQueue[sid].qsize() + realtimeOnProcess[sid].qsize() < realtimeMessageWindow[sid]:
+        if (realtimeMessageQueue[sid].qsize() <= realtimeMessageWindow[sid] - realtimeOnProcess[sid] -
+                realtimeWaitingQueue[sid].qsize()):
+            while not realtimeMessageQueue[sid].empty():
+                realtimeWaitingQueue[sid].put(realtimeMessageQueue[sid].get())
+            break
         else:
-            cooldown[sid] = start_time + cool
-            cool += 1
-        print(str(frame) + '-' + str(cool))
-    elif consume_time < 0.4 and end_time - timer > 5:
-        if frame < 2 <= cool:
-            cool -= 1
-        elif frame < 5:
-            frame += 1
-            timer = time.time()
-        print(str(frame) + '-' + str(cool))
-    wait[sid] = wait[sid] - 1
+            times = realtimeMessageQueue[sid].qsize() // (
+                    realtimeOnProcess[sid] + realtimeWaitingQueue[sid].qsize()) + 1
+            element_per_time = realtimeMessageQueue[sid].qsize() // times - 1
+            for i in range(times):
+                for j in range(element_per_time):
+                    realtimeMessageQueue[sid].get()
+                realtimeWaitingQueue[sid].put(realtimeMessageQueue[sid].get())
+
 
 # def handle_image(message):
 #     if isinstance(message, bytes):  # 检查消息是否为二进制
@@ -518,4 +500,5 @@ def handle_image(message):
 #
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0')
+    # app.run(debug=True)
