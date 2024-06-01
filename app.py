@@ -449,7 +449,7 @@ target_process_time = 0.5  # 目标处理时间为0.5秒
 
 def adjust_sampling_rate(sid, process_time):
     min_samples, max_samples = 1, 10
-    cooldown = 10  # 10 seconds cooldown
+    cooldown = 10
 
     current_time = time.time()
 
@@ -466,53 +466,51 @@ def adjust_sampling_rate(sid, process_time):
 
 def process_images(sid):
     while True:
+        start_time = time.time()
+        selected_messages = []
+        queue_size = 0
+
+        # 只在需要访问共享资源时持有锁
         with conditions[sid]:
             conditions[sid].wait_for(lambda: not realtimeQueues[sid].empty())
-            start_time = time.time()
+            queue_size = realtimeQueues[sid].qsize()
 
-            try:
-                queue_size = realtimeQueues[sid].qsize()
-                if queue_size == 0:
-                    continue
-
-                num_samples = sample_rates.get(sid, 4)  # 使用该sid的局部num_samples值
-
-                if num_samples != 1:
-                    if queue_size >= num_samples:
-                        indexes = [int(queue_size * i / num_samples) for i in range(1, num_samples)]
-                    else:
-                        indexes = list(range(queue_size))
-                else:
-                    indexes = [queue_size - 1]
-
-                selected_messages = []
-
-                for i in range(queue_size):
-                    message = realtimeQueues[sid].get_nowait()
-                    if message is None:
-                        break
-                    if i in indexes:
-                        selected_messages.append(message)
-
-                for message in selected_messages:
-                    if message is None:
-                        break
-
-                    arr = np.frombuffer(message, dtype=np.uint8)
-                    image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-                    if image is not None:
-                        image = frame_process(image)
-                        _, buffer = cv2.imencode('.jpg', image)
-                        socketio.emit('processed', buffer.tobytes(), room=sid)
-                    else:
-                        print("Failed to decode image")
-
-                end_time = time.time()
-                process_time = end_time - start_time
-                adjust_sampling_rate(sid, process_time)
-
-            except Empty:
+            if queue_size == 0:
                 continue
+
+            num_samples = sample_rates.get(sid, 4)
+
+            if num_samples != 1:
+                if queue_size >= num_samples:
+                    indexes = [int(queue_size * i / num_samples) for i in range(1, num_samples)]
+                else:
+                    indexes = list(range(queue_size))
+            else:
+                indexes = [queue_size - 1]
+
+            for i in range(queue_size):
+                message = realtimeQueues[sid].get_nowait()
+                if message is None:
+                    break
+                if i in indexes:
+                    selected_messages.append(message)
+
+        # 图像处理不需要锁保护
+        for message in selected_messages:
+            if message is None:
+                break
+            arr = np.frombuffer(message, dtype=np.uint8)
+            image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if image is not None:
+                image = frame_process(image)
+                _, buffer = cv2.imencode('.jpg', image)
+                socketio.emit('processed', buffer.tobytes(), room=sid)
+            else:
+                print("Failed to decode image")
+
+        end_time = time.time()
+        process_time = end_time - start_time
+        adjust_sampling_rate(sid, process_time)
 
 
 @socketio.on('image')
