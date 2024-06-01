@@ -59,7 +59,7 @@ results = model.track(
 #### CLI
 
 ```bash
-# Perform tracking with various models using the command line interface
+# Perform tracking with various weights using the command line interface
 yolo track model=yolov8n.pt source="https://youtu.be/LNwODJXcvt4"  # Official Detect model
 yolo track model=yolov8n-seg.pt source="https://youtu.be/LNwODJXcvt4"  # Official Segment model
 yolo track model=yolov8n-pose.pt source="https://youtu.be/LNwODJXcvt4"  # Official Pose model
@@ -280,7 +280,7 @@ def run_tracker_in_thread(filename, model):
                 break
 
 
-# Load the models
+# Load the weights
 model1 = YOLO("yolov8n.pt")
 model2 = YOLO("yolov8n-seg.pt")
 

@@ -14,11 +14,11 @@ class ClassificationValidator(BaseValidator):
     A class extending the BaseValidator class for validation based on a classification model.
 
     Notes:
-        - Torchvision classification models can also be passed to the 'model' argument, i.e. model='resnet18'.
+        - Torchvision classification weights can also be passed to the 'model' argument, i.e. model='resnet18'.
 
     Example:
         ```python
-        from ultralytics.models.yolo.classify import ClassificationValidator
+        from ultralytics.weights.yolo.classify import ClassificationValidator
 
         args = dict(model='yolov8n-cls.pt', data='imagenet10')
         validator = ClassificationValidator(args=args)
@@ -95,7 +95,7 @@ class ClassificationValidator(BaseValidator):
         plot_images(
             images=batch["img"],
             batch_idx=torch.arange(len(batch["img"])),
-            cls=batch["cls"].view(-1),  # warning: use .view(), not .squeeze() for Classify models
+            cls=batch["cls"].view(-1),  # warning: use .view(), not .squeeze() for Classify weights
             fname=self.save_dir / f"val_batch{ni}_labels.jpg",
             names=self.names,
             on_plot=self.on_plot,

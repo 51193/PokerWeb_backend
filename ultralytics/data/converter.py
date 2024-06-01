@@ -221,7 +221,7 @@ def convert_coco(
     cls91to80=True,
 ):
     """
-    Converts COCO dataset annotations to a YOLO annotation format  suitable for training YOLO models.
+    Converts COCO dataset annotations to a YOLO annotation format  suitable for training YOLO weights.
 
     Args:
         labels_dir (str, optional): Path to directory containing COCO dataset annotation files.

@@ -20,7 +20,7 @@ class DetectionValidator(BaseValidator):
 
     Example:
         ```python
-        from ultralytics.models.yolo.detect import DetectionValidator
+        from ultralytics.weights.yolo.detect import DetectionValidator
 
         args = dict(model='yolov8n.pt', data='coco8.yaml')
         validator = DetectionValidator(args=args)

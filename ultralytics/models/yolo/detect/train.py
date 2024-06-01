@@ -22,7 +22,7 @@ class DetectionTrainer(BaseTrainer):
 
     Example:
         ```python
-        from ultralytics.models.yolo.detect import DetectionTrainer
+        from ultralytics.weights.yolo.detect import DetectionTrainer
 
         args = dict(model='yolov8n.pt', data='coco8.yaml', epochs=3)
         trainer = DetectionTrainer(overrides=args)

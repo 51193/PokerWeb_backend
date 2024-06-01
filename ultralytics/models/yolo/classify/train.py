@@ -17,11 +17,11 @@ class ClassificationTrainer(BaseTrainer):
     A class extending the BaseTrainer class for training based on a classification model.
 
     Notes:
-        - Torchvision classification models can also be passed to the 'model' argument, i.e. model='resnet18'.
+        - Torchvision classification weights can also be passed to the 'model' argument, i.e. model='resnet18'.
 
     Example:
         ```python
-        from ultralytics.models.yolo.classify import ClassificationTrainer
+        from ultralytics.weights.yolo.classify import ClassificationTrainer
 
         args = dict(model='yolov8n-cls.pt', data='imagenet10', epochs=3)
         trainer = ClassificationTrainer(overrides=args)
@@ -152,7 +152,7 @@ class ClassificationTrainer(BaseTrainer):
         plot_images(
             images=batch["img"],
             batch_idx=torch.arange(len(batch["img"])),
-            cls=batch["cls"].view(-1),  # warning: use .view(), not .squeeze() for Classify models
+            cls=batch["cls"].view(-1),  # warning: use .view(), not .squeeze() for Classify weights
             fname=self.save_dir / f"train_batch{ni}.jpg",
             on_plot=self.on_plot,
         )
