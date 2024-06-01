@@ -119,7 +119,7 @@ class HungarianMatcher(nn.Module):
             for k, (i, j) in enumerate(indices)
         ]
 
-    # This function is for future RT-DETR Segment models
+    # This function is for future RT-DETR Segment weights
     # def _cost_mask(self, bs, num_gts, masks=None, gt_mask=None):
     #     assert masks is not None and gt_mask is not None, 'Make sure the input has `mask` and `gt_mask`'
     #     # all masks share the same set of points for efficient matching

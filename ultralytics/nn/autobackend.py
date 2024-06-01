@@ -52,7 +52,7 @@ def default_class_names(data=None):
 
 class AutoBackend(nn.Module):
     """
-    Handles dynamic backend selection for running inference using Ultralytics YOLO models.
+    Handles dynamic backend selection for running inference using Ultralytics YOLO weights.
 
     The AutoBackend class is designed to provide an abstraction layer for various inference engines. It supports a wide
     range of formats, each with specific naming conventions as outlined below:
@@ -75,7 +75,7 @@ class AutoBackend(nn.Module):
             | ncnn                  | *_ncnn_model     |
 
     This class offers dynamic backend switching capabilities based on the input model format, making it easier to deploy
-    models across various platforms.
+    weights across various platforms.
     """
 
     @torch.no_grad()
@@ -414,7 +414,7 @@ class AutoBackend(nn.Module):
             y = self.model.predict({"image": im_pil})  # coordinates are xywh normalized
             if "confidence" in y:
                 raise TypeError(
-                    "Ultralytics only supports inference of non-pipelined CoreML models exported with "
+                    "Ultralytics only supports inference of non-pipelined CoreML weights exported with "
                     f"'nms=False', but 'model={w}' has an NMS pipeline created by an 'nms=True' export."
                 )
                 # TODO: CoreML NMS inference handling
@@ -425,7 +425,7 @@ class AutoBackend(nn.Module):
             elif len(y) == 1:  # classification model
                 y = list(y.values())
             elif len(y) == 2:  # segmentation model
-                y = list(reversed(y.values()))  # reversed for segmentation models (pred, proto)
+                y = list(reversed(y.values()))  # reversed for segmentation weights (pred, proto)
         elif self.paddle:  # PaddlePaddle
             im = im.cpu().numpy().astype(np.float32)
             self.input_handle.copy_from_cpu(im)
@@ -472,7 +472,7 @@ class AutoBackend(nn.Module):
                         x = (x.astype(np.float32) - zero_point) * scale  # re-scale
                     if x.ndim > 2:  # if task is not classification
                         # Denormalize xywh by image size. See https://github.com/ultralytics/ultralytics/pull/1695
-                        # xywh are normalized in TFLite/EdgeTPU to mitigate quantization error of integer models
+                        # xywh are normalized in TFLite/EdgeTPU to mitigate quantization error of integer weights
                         x[:, [0, 2]] *= w
                         x[:, [1, 3]] *= h
                     y.append(x)

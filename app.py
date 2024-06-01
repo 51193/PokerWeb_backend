@@ -2,23 +2,16 @@ import base64
 import os
 import tempfile
 import threading
-import time
 import queue
-
-from queue import Empty
-
+import time
 from flask import Flask, jsonify, send_file, request
 from flask_cors import CORS
-import random  # 导入random模块，用于生成随机数
 from QtFusion.config import QF_Config
 import cv2  # 导入OpenCV库，用于处理图像
-from QtFusion.utils import drawRectBox  # 从QtFusion库中导入cv_imread和drawRectBox函数，用于读取图像和绘制矩形框
+from QtFusion.utils import drawRectBox, get_cls_color  # 从QtFusion库中导入cv_imread和drawRectBox函数，用于读取图像和绘制矩形框
 from QtFusion.path import abs_path
 from flask_socketio import SocketIO
-
 from YOLOv8Model import YOLOv8Detector  # 从YOLOv8Model模块中导入YOLOv8Detector类，用于加载YOLOv8模型并进行目标检测
-from datasets.PokerCards.label_name import Label_list_poker
-from datasets.SGS.label_name import Label_list_sgs
 import numpy as np
 import pymysql
 import jwt
@@ -30,11 +23,6 @@ app.config['JSON_AS_ASCII'] = False  # 禁止中文转义
 QF_Config.set_verbose(False)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-colors = [[random.randint(100, 255) for _ in range(3)] for _ in range(len(Label_list_poker))]  # 为每个目标类别生成一个随机颜色
-
-model = YOLOv8Detector()  # 创建YOLOv8Detector对象
-model.load_model(abs_path("weights/best-yolov8n.pt", path_type="current"))  # 加载预训练的YOLOv8模型
-
 # MySQL 连接配置
 MYSQL_HOST = '127.0.0.1'
 MYSQL_USER = 'root'  # 替换为你的 MySQL 用户名
@@ -43,7 +31,7 @@ MYSQL_DB = 'DC'  # 替换为你的数据库名称
 
 SECRET_KEY = "key"
 
-Game_List = ["SGS", "poker"]
+Game_List = ["sgs", "poker"]
 
 
 def get_mysql_connection():
@@ -57,9 +45,13 @@ try:
 except pymysql.Error as e:
     print("数据库连接失败:", e)
 
+model = YOLOv8Detector()  # 创建YOLOv8Detector对象
+model.load_model(abs_path("weights/best-yolov8n.pt", path_type="current"))  # 加载预训练的YOLOv8模型
+
+
+colors = get_cls_color(model.names)
 
 def frame_process(image):  # 定义帧处理函数，用于处理每一帧图像
-    # image = cv2.resize(image, (850, 500))  # 将图像的大小调整为850x500
     pre_img = model.preprocess(image)  # 对图像进行预处理
     pred = model.predict(pre_img)  # 使用模型进行预测
     det = pred[0]  # 获取预测结果
@@ -118,11 +110,6 @@ def get_username_from_token():
 def change_model():
     name = request.json.get('name')
     if name in Game_List:
-        global colors
-        if name == "poker":
-            colors = [[random.randint(0, 155) for _ in range(3)] for _ in range(len(Label_list_poker))]
-        elif name == "SGS":
-            colors = [[random.randint(0, 100) for _ in range(3)] for _ in range(len(Label_list_sgs))]
         model.load_model(abs_path(f"weights/{name}.pt", path_type="current"))
         model.change_name(name)
         return jsonify({'message': '模型切换成功'})
@@ -230,32 +217,43 @@ def get_games():
         page_size = int(request.args.get('pageSize', 8))
         offset = (page - 1) * page_size
 
-        connection = get_mysql_connection()
-        cursor = connection.cursor()
-        # 查询游戏列表
-        cursor.execute("SELECT name,url FROM games LIMIT %s OFFSET %s", (page_size, offset))
-        games = cursor.fetchall()
-        # 查询总游戏数量
-        cursor.execute("SELECT COUNT(*) FROM games")
-        total = cursor.fetchone()[0]
-        # 关闭游标和数据库连接
-        cursor.close()
-        connection.close()
-        # 假设你的图片存储在服务器的某个目录下，例如 '/path/to/images/'
+        # 使用上下文管理器管理数据库连接和游标
+        with get_mysql_connection() as connection:
+            with connection.cursor() as cursor:
+                # 查询游戏列表
+                cursor.execute("SELECT name, url FROM games LIMIT %s OFFSET %s", (page_size, offset))
+                games = cursor.fetchall()
+
+                # 查询总游戏数量
+                cursor.execute("SELECT COUNT(*) FROM games")
+                total = cursor.fetchone()[0]
+
+        # 假设你的图片存储在服务器的某个目录下，例如 'image/'
         image_directory = 'image/'
-        # 格式化游戏列表，并将图片文件读取为Base64编码
         games_list = []
+
+        # 格式化游戏列表，并将图片文件读取为Base64编码
         for game in games:
-            # 构建图片的完整路径
-            image_path = os.path.join(image_directory, f"{game[0]}.jpg")  # 假设图片文件扩展名为.jpg
-            # 读取图片文件并转换为Base64编码
-            with open(image_path, "rb") as image_file:
-                encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
-            # 添加到游戏列表
+            game_name = game[0]
+            game_url = game[1]
+            image_path = os.path.join(image_directory, f"{game_name}.jpg")  # 假设图片文件扩展名为.jpg
+
+            # 检查图片文件是否存在
+            if os.path.exists(image_path):
+                with open(image_path, "rb") as image_file:
+                    encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
+                image_data = f"data:image/jpeg;base64,{encoded_image}"
+            else:
+                # 如果图片不存在，可以使用默认图片或处理逻辑
+                default_image_path = os.path.join(image_directory, 'default.jpg')
+                with open(default_image_path, "rb") as image_file:
+                    encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
+                image_data = f"data:image/jpeg;base64,{encoded_image}"
+
             games_list.append({
-                'name': game[0],
-                'image': f"data:image/jpeg;base64,{encoded_image}",  # 假设MIME类型为image/jpeg
-                'url': game[1]
+                'name': game_name,
+                'image': image_data,
+                'url': game_url
             })
 
         return jsonify({'games': games_list, 'total': total}), 200
@@ -420,12 +418,15 @@ def handle_connect():
 def handle_disconnect():
     sid = request.sid
     if sid in realtimeQueues:
-        realtimeQueues[sid].put(None)  # 发送停止信号
+        realtimeQueues[sid].put(None)
         processingThreads[sid].join()
+
         with locks[sid]:
             del realtimeQueues[sid]
             del processingThreads[sid]
             del conditions[sid]
+            if sid in sample_rates:  # 清理该sid的sample_rates记录
+                del sample_rates[sid]
     print('Client disconnected')
 
 
@@ -437,67 +438,95 @@ processingThreads = {}
 conditions = {}
 locks = {}
 
+# 初始化每个sid的处理时间跟踪和上次调整时间
+processTimes = {}
+lastAdjustmentTimes = {}
+sample_rates = {}  # 线程局部存储的批处理数量
+target_process_time = 0.5  # 目标处理时间为0.5秒
+
+
+def adjust_sampling_rate(sid, process_time):
+    min_samples, max_samples = 1, 10
+    cooldown = 10
+
+    current_time = time.time()
+
+    if sid not in lastAdjustmentTimes or current_time - lastAdjustmentTimes[sid] > cooldown:
+        if process_time > target_process_time and sample_rates[sid] > min_samples:  # 如果处理时间大于目标处理时间
+            sample_rates[sid] -= 1
+        elif process_time < target_process_time and sample_rates[sid] < max_samples:  # 如果处理时间小于目标处理时间
+            sample_rates[sid] += 1
+
+        lastAdjustmentTimes[sid] = current_time
+        processTimes[sid] = process_time
+        print(f'Adjusted number of samples to {sample_rates[sid]} for sid {sid}')
+
 
 def process_images(sid):
     while True:
+        start_time = time.time()
+        selected_messages = []
+        queue_size = 0
+
+        # 只在需要访问共享资源时持有锁
         with conditions[sid]:
-            conditions[sid].wait_for(lambda: not realtimeQueues[sid].empty())  # 等待条件变量通知
-            try:
-                queue_size = realtimeQueues[sid].qsize()
+            conditions[sid].wait_for(lambda: not realtimeQueues[sid].empty())
+            queue_size = realtimeQueues[sid].qsize()
 
-                if queue_size == 0:
-                    continue
+            if queue_size == 0:
+                continue
 
-                # 确定抽取的索引
-                num_samples = 4
+            num_samples = sample_rates.get(sid, 4)
+
+            if num_samples != 1:
                 if queue_size >= num_samples:
                     indexes = [int(queue_size * i / num_samples) for i in range(1, num_samples)]
                 else:
                     indexes = list(range(queue_size))
+            else:
+                indexes = [queue_size - 1]
 
-                selected_messages = []
+            for i in range(queue_size):
+                message = realtimeQueues[sid].get_nowait()
+                if message is None:
+                    break
+                if i in indexes:
+                    selected_messages.append(message)
 
-                # 抽取特定消息
-                for i in range(queue_size):
-                    message = realtimeQueues[sid].get_nowait()
-                    if message is None:
-                        # 清空队列，处理停止信号
-                        break
-                    if i in indexes:
-                        selected_messages.append(message)
+        # 图像处理不需要锁保护
+        for message in selected_messages:
+            if message is None:
+                break
+            arr = np.frombuffer(message, dtype=np.uint8)
+            image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if image is not None:
+                image = frame_process(image)
+                _, buffer = cv2.imencode('.jpg', image)
+                socketio.emit('processed', buffer.tobytes(), room=sid)
+            else:
+                print("Failed to decode image")
 
-                # 处理并发送消息
-                for message in selected_messages:
-                    if message is None:
-                        break
-
-                    arr = np.frombuffer(message, dtype=np.uint8)
-                    image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-                    if image is not None:
-                        image = frame_process(image)  # 假设frame_process是定义的处理函数
-                        _, buffer = cv2.imencode('.jpg', image)
-                        socketio.emit('processed', buffer.tobytes(), room=sid)
-                    else:
-                        print("Failed to decode image")
-
-            except Empty:
-                continue
+        end_time = time.time()
+        process_time = end_time - start_time
+        adjust_sampling_rate(sid, process_time)
 
 
 @socketio.on('image')
 def handle_image(message):
     sid = request.sid
     if sid not in realtimeQueues:
-        # 创建新的线程、队列和条件变量
         locks[sid] = threading.Lock()
-        conditions[sid] = threading.Condition(lock=locks[sid])  # 明确指定条件变量使用的锁
+        conditions[sid] = threading.Condition(lock=locks[sid])
         realtimeQueues[sid] = queue.Queue()
+        sample_rates[sid] = 4  # 每个sid初始批处理数量
         processingThreads[sid] = threading.Thread(target=process_images, args=(sid,))
         processingThreads[sid].start()
+        processTimes[sid] = 0  # 初始化处理时间
+        lastAdjustmentTimes[sid] = time.time()  # 初始化调整时间
 
-    with conditions[sid]:  # 使用条件变量的锁来同步操作
+    with conditions[sid]:
         realtimeQueues[sid].put(message)
-        conditions[sid].notify()  # 在持有锁的情况下通知
+        conditions[sid].notify()
 
 
 if __name__ == '__main__':

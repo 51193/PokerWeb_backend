@@ -992,12 +992,12 @@ class SegmentMetrics(SimpleClass):
 
     @property
     def maps(self):
-        """Returns mAP scores for object detection and semantic segmentation models."""
+        """Returns mAP scores for object detection and semantic segmentation weights."""
         return self.box.maps + self.seg.maps
 
     @property
     def fitness(self):
-        """Get the fitness score for both segmentation and bounding box models."""
+        """Get the fitness score for both segmentation and bounding box weights."""
         return self.seg.fitness() + self.box.fitness()
 
     @property

@@ -557,7 +557,7 @@ class TinyViT(nn.Module):
     Note:
         This implementation is generalized to accept a list of depths, attention heads,
         embedding dimensions and window sizes, which allows you to create a
-        "stack" of TinyViT models of varying configurations.
+        "stack" of TinyViT weights of varying configurations.
     """
 
     def __init__(

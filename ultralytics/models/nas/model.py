@@ -25,8 +25,8 @@ class NAS(Model):
     """
     YOLO NAS model for object detection.
 
-    This class provides an interface for the YOLO-NAS models and extends the `Model` class from Ultralytics engine.
-    It is designed to facilitate the task of object detection using pre-trained or custom-trained YOLO-NAS models.
+    This class provides an interface for the YOLO-NAS weights and extends the `Model` class from Ultralytics engine.
+    It is designed to facilitate the task of object detection using pre-trained or custom-trained YOLO-NAS weights.
 
     Example:
         ```python
@@ -40,12 +40,12 @@ class NAS(Model):
         model (str): Path to the pre-trained model or model name. Defaults to 'yolo_nas_s.pt'.
 
     Note:
-        YOLO-NAS models only support pre-trained models. Do not provide YAML configuration files.
+        YOLO-NAS weights only support pre-trained weights. Do not provide YAML configuration files.
     """
 
     def __init__(self, model="yolo_nas_s.pt") -> None:
         """Initializes the NAS model with the provided or default 'yolo_nas_s.pt' model."""
-        assert Path(model).suffix not in (".yaml", ".yml"), "YOLO-NAS models only support pre-trained models."
+        assert Path(model).suffix not in (".yaml", ".yml"), "YOLO-NAS weights only support pre-trained weights."
         super().__init__(model, task="detect")
 
     @smart_inference_mode()

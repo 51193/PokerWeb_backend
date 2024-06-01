@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-import cv2
 import torch
 from QtFusion.models import Detector  # 从QtFusion库中导入Detector抽象基类
 from datasets.PokerCards.label_name import Chinese_name_poker  # 导入扑克牌的中文名称
@@ -39,7 +37,7 @@ class YOLOv8Detector(Detector):
         super().__init__(params)
         self.model = None
         self.img = None  # 初始化图像为None
-        self.names = list(Chinese_name_poker.values())  # 获取所有类别的中文名称
+        # self.names = list(Chinese_name_poker.values())  # 获取所有类别的中文名称
         self.params = params if params else ini_params  # 如果提供了参数则使用提供的参数，否则使用默认参数
 
     def load_model(self, model_path):
@@ -73,11 +71,9 @@ class YOLOv8Detector(Detector):
 
         :param name: 名称，可以是"SGS"或"poker"
         """
-        if name == "SGS":
-            self.names = list(Chinese_name_sgs.values())
+        if name == "sgs":
             self.names = [Chinese_name_sgs.get(v, v) for v in self.model.names.values()]
         elif name == "poker":
-            self.names = list(Chinese_name_poker.values())
             self.names = [Chinese_name_poker.get(v, v) for v in self.model.names.values()]
 
     def preprocess(self, img):

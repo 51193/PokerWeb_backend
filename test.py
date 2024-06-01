@@ -1,25 +1,23 @@
-import jwt
-from datetime import datetime, timedelta
-SECRET_KEY = 'your_secret_key'
-def create_token(user_id):
-    payload = {
-        'exp': datetime.utcnow() + timedelta(days=1),  # 令牌有效期为1天
-        'iat': datetime.utcnow(),
-        'sub': user_id  # 通常 'sub' 表示 subject，即用户的唯一标识
-    }
-    token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
-    return token
+# 所需加载的模型目录
+import cv2
+from ultralytics import YOLO
 
-def verify_token(token):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
-        return payload['sub']
-    except jwt.ExpiredSignatureError:
-        return None  # Token has expired
-    except jwt.InvalidTokenError:
-        return None  # Token is invalid
+path = 'weights/poker.pt'
+# 需要检测的图片地址
+img_path = "test_media/65cbee4c15cd05d27ad22832fe50d382.jpeg"
 
-print(create_token("wer"))
+# 加载预训练模型
+model = YOLO(path, task='detect')
+# 检测图片
+results = model(img_path, conf=0.7)
+detected_names = []
+for result in results:
+    for box in result.boxes:
+        class_id = int(box.cls[0])  # 获取类别索引
+        class_name = model.names.get(class_id, 'Unknown')  # 获取标签名称
+        detected_names.append(class_name)
+print("检测到的目标名称：", detected_names)
 
-verify_token = verify_token(create_token("qwe"))
-print(verify_token)
+res = results[0].plot()
+cv2.imshow("YOLOv8 Detection", res)
+cv2.waitKey(0)

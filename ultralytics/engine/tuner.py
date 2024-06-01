@@ -1,10 +1,10 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 """
-This module provides functionalities for hyperparameter tuning of the Ultralytics YOLO models for object detection,
+This module provides functionalities for hyperparameter tuning of the Ultralytics YOLO weights for object detection,
 instance segmentation, image classification, pose estimation, and multi-object tracking.
 
 Hyperparameter tuning is the process of systematically searching for the optimal set of hyperparameters
-that yield the best model performance. This is particularly crucial in deep learning models like YOLO,
+that yield the best model performance. This is particularly crucial in deep learning weights like YOLO,
 where small changes in hyperparameters can lead to significant differences in model accuracy and efficiency.
 
 Example:
@@ -31,7 +31,7 @@ from ultralytics.utils.plotting import plot_tune_results
 
 class Tuner:
     """
-    Class responsible for hyperparameter tuning of YOLO models.
+    Class responsible for hyperparameter tuning of YOLO weights.
 
     The class evolves YOLO model hyperparameters over a given number of iterations
     by mutating them according to the search space and retraining the model to evaluate their performance.
