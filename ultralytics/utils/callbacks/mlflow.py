@@ -100,7 +100,7 @@ def on_fit_epoch_end(trainer):
 def on_train_end(trainer):
     """Log model artifacts at the end of the training."""
     if mlflow:
-        mlflow.log_artifact(str(trainer.best.parent))  # log save_dir/weights directory with best.pt and last.pt
+        mlflow.log_artifact(str(trainer.best.parent))  # log save_dir/weights directory with best-yolov8n-sgs.pt and last.pt
         for f in trainer.save_dir.glob("*"):  # log all other files in save_dir
             if f.suffix in {".png", ".jpg", ".csv", ".pt", ".yaml"}:
                 mlflow.log_artifact(str(f))

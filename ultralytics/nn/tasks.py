@@ -63,7 +63,7 @@ except ImportError:
 
 
 class BaseModel(nn.Module):
-    """The BaseModel class serves as a base class for all the weights in the Ultralytics YOLO family."""
+    """The BaseModel class serves as a base class for all the models in the Ultralytics YOLO family."""
 
     def forward(self, x, *args, **kwargs):
         """
@@ -236,7 +236,7 @@ class BaseModel(nn.Module):
             weights (dict | torch.nn.Module): The pre-trained weights to be loaded.
             verbose (bool, optional): Whether to log the transfer progress. Defaults to True.
         """
-        model = weights["model"] if isinstance(weights, dict) else weights  # torchvision weights are not dicts
+        model = weights["model"] if isinstance(weights, dict) else weights  # torchvision models are not dicts
         csd = model.float().state_dict()  # checkpoint state_dict as FP32
         csd = intersect_dicts(csd, self.state_dict())  # intersect
         self.load_state_dict(csd, strict=False)  # load
@@ -547,10 +547,10 @@ class RTDETRDetectionModel(DetectionModel):
 
 
 class Ensemble(nn.ModuleList):
-    """Ensemble of weights."""
+    """Ensemble of models."""
 
     def __init__(self):
-        """Initialize an ensemble of weights."""
+        """Initialize an ensemble of models."""
         super().__init__()
 
     def forward(self, x, augment=False, profile=False, visualize=False):
@@ -627,14 +627,14 @@ def torch_safe_load(weight):
         with temporary_modules(
             {
                 "ultralytics.yolo.utils": "ultralytics.utils",
-                "ultralytics.yolo.v8": "ultralytics.weights.yolo",
+                "ultralytics.yolo.v8": "ultralytics.models.yolo",
                 "ultralytics.yolo.data": "ultralytics.data",
             }
-        ):  # for legacy 8.0 Classify and Pose weights
+        ):  # for legacy 8.0 Classify and Pose models
             return torch.load(file, map_location="cpu"), file  # load
 
     except ModuleNotFoundError as e:  # e.name is missing module name
-        if e.name == "weights":
+        if e.name == "models":
             raise TypeError(
                 emojis(
                     f"ERROR ❌️ {weight} appears to be an Ultralytics YOLOv5 model originally trained "
@@ -656,7 +656,7 @@ def torch_safe_load(weight):
 
 
 def attempt_load_weights(weights, device=None, inplace=True, fuse=False):
-    """Loads an ensemble of weights weights=[a,b,c] or a single model weights=[a] or weights=a."""
+    """Loads an ensemble of models weights=[a,b,c] or a single model weights=[a] or weights=a."""
 
     ensemble = Ensemble()
     for w in weights if isinstance(weights, list) else [weights]:
@@ -829,7 +829,7 @@ def yaml_model_load(path):
     path = Path(path)
     if path.stem in (f"yolov{d}{x}6" for x in "nsmlx" for d in (5, 8)):
         new_stem = re.sub(r"(\d+)([nslmx])6(.+)?$", r"\1\2-p6\3", path.stem)
-        LOGGER.warning(f"WARNING ⚠️ Ultralytics YOLO P6 weights now use -p6 suffix. Renaming {path.stem} to {new_stem}.")
+        LOGGER.warning(f"WARNING ⚠️ Ultralytics YOLO P6 models now use -p6 suffix. Renaming {path.stem} to {new_stem}.")
         path = path.with_name(new_stem + path.suffix)
 
     unified_path = re.sub(r"(\d+)([nslmx])(.+)?$", r"\1\3", str(path))  # i.e. yolov8x.yaml -> yolov8.yaml

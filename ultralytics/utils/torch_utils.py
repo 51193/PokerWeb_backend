@@ -314,7 +314,7 @@ def get_flops(model, imgsz=640):
             flops = thop.profile(deepcopy(model), inputs=[im], verbose=False)[0] / 1e9 * 2  # stride GFLOPs
             return flops * imgsz[0] / stride * imgsz[1] / stride  # imgsz GFLOPs
         except Exception:
-            # Use actual image size for input tensor (i.e. required for RTDETR weights)
+            # Use actual image size for input tensor (i.e. required for RTDETR models)
             im = torch.empty((1, p.shape[1], *imgsz), device=p.device)  # input image in BCHW format
             return thop.profile(deepcopy(model), inputs=[im], verbose=False)[0] / 1e9 * 2  # imgsz GFLOPs
     except Exception:
@@ -461,12 +461,12 @@ class ModelEMA:
             copy_attr(self.ema, model, include, exclude)
 
 
-def strip_optimizer(f: Union[str, Path] = "best.pt", s: str = "") -> None:
+def strip_optimizer(f: Union[str, Path] = "best-yolov8n-sgs.pt", s: str = "") -> None:
     """
     Strip optimizer from 'f' to finalize training, optionally save as 's'.
 
     Args:
-        f (str): file path to model to strip the optimizer from. Default is 'best.pt'.
+        f (str): file path to model to strip the optimizer from. Default is 'best-yolov8n-sgs.pt'.
         s (str): file path to save the model with stripped optimizer to. If not provided, 'f' will be overwritten.
 
     Returns:
@@ -601,7 +601,7 @@ class EarlyStopping:
         if stop:
             LOGGER.info(
                 f"Stopping training early as no improvement observed in last {self.patience} epochs. "
-                f"Best results observed at epoch {self.best_epoch}, best model saved as best.pt.\n"
+                f"Best results observed at epoch {self.best_epoch}, best model saved as best-yolov8n-sgs.pt.\n"
                 f"To update EarlyStopping(patience={self.patience}) pass a new patience value, "
                 f"i.e. `patience=300` or use `patience=0` to disable EarlyStopping."
             )

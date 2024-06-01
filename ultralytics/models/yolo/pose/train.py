@@ -14,7 +14,7 @@ class PoseTrainer(yolo.detect.DetectionTrainer):
 
     Example:
         ```python
-        from ultralytics.weights.yolo.pose import PoseTrainer
+        from ultralytics.models.yolo.pose import PoseTrainer
 
         args = dict(model='yolov8n-pose.pt', data='coco8-pose.yaml', epochs=3)
         trainer = PoseTrainer(overrides=args)
@@ -31,7 +31,7 @@ class PoseTrainer(yolo.detect.DetectionTrainer):
 
         if isinstance(self.args.device, str) and self.args.device.lower() == "mps":
             LOGGER.warning(
-                "WARNING ⚠️ Apple MPS known Pose bug. Recommend 'device=cpu' for Pose weights. "
+                "WARNING ⚠️ Apple MPS known Pose bug. Recommend 'device=cpu' for Pose models. "
                 "See https://github.com/ultralytics/ultralytics/issues/4031."
             )
 

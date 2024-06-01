@@ -17,7 +17,7 @@ __all__ = "Detect", "Segment", "Pose", "Classify", "OBB", "RTDETRDecoder"
 
 
 class Detect(nn.Module):
-    """YOLOv8 Detect head for detection weights."""
+    """YOLOv8 Detect head for detection models."""
 
     dynamic = False  # force grid reconstruction
     export = False  # export mode
@@ -88,7 +88,7 @@ class Detect(nn.Module):
 
 
 class Segment(Detect):
-    """YOLOv8 Segment head for segmentation weights."""
+    """YOLOv8 Segment head for segmentation models."""
 
     def __init__(self, nc=80, nm=32, npr=256, ch=()):
         """Initialize the YOLO model attributes such as the number of masks, prototypes, and the convolution layers."""
@@ -114,7 +114,7 @@ class Segment(Detect):
 
 
 class OBB(Detect):
-    """YOLOv8 OBB detection head for detection with rotation weights."""
+    """YOLOv8 OBB detection head for detection with rotation models."""
 
     def __init__(self, nc=80, ne=1, ch=()):
         """Initialize OBB with number of classes `nc` and layer channels `ch`."""
@@ -145,7 +145,7 @@ class OBB(Detect):
 
 
 class Pose(Detect):
-    """YOLOv8 Pose head for keypoints weights."""
+    """YOLOv8 Pose head for keypoints models."""
 
     def __init__(self, nc=80, kpt_shape=(17, 3), ch=()):
         """Initialize YOLO network with default parameters and Convolutional Layers."""

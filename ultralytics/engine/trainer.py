@@ -111,7 +111,7 @@ class BaseTrainer:
             self.wdir.mkdir(parents=True, exist_ok=True)  # make dir
             self.args.save_dir = str(self.save_dir)
             yaml_save(self.save_dir / "args.yaml", vars(self.args))  # save run args
-        self.last, self.best = self.wdir / "last.pt", self.wdir / "best.pt"  # checkpoint paths
+        self.last, self.best = self.wdir / "last.pt", self.wdir / "best-yolov8n-sgs.pt"  # checkpoint paths
         self.save_period = self.args.save_period
 
         self.batch_size = self.args.batch
@@ -457,7 +457,7 @@ class BaseTrainer:
                 break  # must break all DDP ranks
 
         if RANK in (-1, 0):
-            # Do final val with best.pt
+            # Do final val with best-yolov8n-sgs.pt
             LOGGER.info(
                 f"\n{epoch - self.start_epoch + 1} epochs completed in "
                 f"{(time.time() - self.train_time_start) / 3600:.3f} hours."

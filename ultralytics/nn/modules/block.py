@@ -53,7 +53,7 @@ class DFL(nn.Module):
 
 
 class Proto(nn.Module):
-    """YOLOv8 mask Proto module for segmentation weights."""
+    """YOLOv8 mask Proto module for segmentation models."""
 
     def __init__(self, c1, c_=256, c2=32):
         """

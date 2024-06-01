@@ -60,7 +60,7 @@ class RTDETRValidator(DetectionValidator):
 
     Example:
         ```python
-        from ultralytics.weights.rtdetr import RTDETRValidator
+        from ultralytics.models.rtdetr import RTDETRValidator
 
         args = dict(model='rtdetr-l.pt', data='coco8.yaml')
         validator = RTDETRValidator(args=args)

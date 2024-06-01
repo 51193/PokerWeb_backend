@@ -16,7 +16,7 @@ AGENT_NAME = f"python-{__version__}-colab" if is_colab() else f"python-{__versio
 
 class HUBTrainingSession:
     """
-    HUB training session for Ultralytics HUB YOLO weights. Handles model initialization, heartbeats, and checkpointing.
+    HUB training session for Ultralytics HUB YOLO models. Handles model initialization, heartbeats, and checkpointing.
 
     Attributes:
         agent_id (str): Identifier for the instance communicating with the server.
@@ -75,7 +75,7 @@ class HUBTrainingSession:
         if not self.model.data:  # then model does not exist
             raise ValueError(emojis("❌ The specified HUB model does not exist"))  # TODO: improve error handling
 
-        self.model_url = f"{HUB_WEB_ROOT}/weights/{self.model.id}"
+        self.model_url = f"{HUB_WEB_ROOT}/models/{self.model.id}"
 
         self._set_train_args()
 
@@ -114,7 +114,7 @@ class HUBTrainingSession:
         if not self.model.id:
             return
 
-        self.model_url = f"{HUB_WEB_ROOT}/weights/{self.model.id}"
+        self.model_url = f"{HUB_WEB_ROOT}/models/{self.model.id}"
 
         # Start heartbeats for HUB to monitor agent
         self.model.start_heartbeat(self.rate_limits["heartbeat"])
@@ -126,7 +126,7 @@ class HUBTrainingSession:
         Parses the given identifier to determine the type of identifier and extract relevant components.
 
         The method supports different identifier formats:
-            - A HUB URL, which starts with HUB_WEB_ROOT followed by '/weights/'
+            - A HUB URL, which starts with HUB_WEB_ROOT followed by '/models/'
             - An identifier containing an API key and a model ID separated by an underscore
             - An identifier that is solely a model ID of a fixed length
             - A local filename that ends with '.pt' or '.yaml'
@@ -145,9 +145,9 @@ class HUBTrainingSession:
         api_key, model_id, filename = None, None, None
 
         # Check if identifier is a HUB URL
-        if identifier.startswith(f"{HUB_WEB_ROOT}/weights/"):
+        if identifier.startswith(f"{HUB_WEB_ROOT}/models/"):
             # Extract the model_id after the HUB_WEB_ROOT URL
-            model_id = identifier.split(f"{HUB_WEB_ROOT}/weights/")[-1]
+            model_id = identifier.split(f"{HUB_WEB_ROOT}/models/")[-1]
         else:
             # Split the identifier based on underscores only if it's not a HUB URL
             parts = identifier.split("_")

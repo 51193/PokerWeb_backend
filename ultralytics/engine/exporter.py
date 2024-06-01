@@ -570,7 +570,7 @@ class Exporter:
             model = IOSDetectModel(self.model, self.im) if self.args.nms else self.model
         else:
             if self.args.nms:
-                LOGGER.warning(f"{prefix} WARNING ⚠️ 'nms=True' is only available for Detect weights like 'yolov8n.pt'.")
+                LOGGER.warning(f"{prefix} WARNING ⚠️ 'nms=True' is only available for Detect models like 'yolov8n.pt'.")
                 # TODO CoreML Segment and Pose model pipelining
             model = self.model
 
@@ -770,7 +770,7 @@ class Exporter:
         subprocess.run(cmd, shell=True)
         yaml_save(f / "metadata.yaml", self.metadata)  # add metadata.yaml
 
-        # Remove/rename TFLite weights
+        # Remove/rename TFLite models
         if self.args.int8:
             tmp_file.unlink(missing_ok=True)
             for file in f.rglob("*_dynamic_range_quant.tflite"):
@@ -890,7 +890,7 @@ class Exporter:
         return f, None
 
     def _add_tflite_metadata(self, file):
-        """Add metadata to *.tflite weights per https://www.tensorflow.org/lite/models/convert/metadata."""
+        """Add metadata to *.tflite models per https://www.tensorflow.org/lite/models/convert/metadata."""
         from tflite_support import flatbuffers  # noqa
         from tflite_support import metadata as _metadata  # noqa
         from tflite_support import metadata_schema_py_generated as _metadata_fb  # noqa
@@ -981,7 +981,7 @@ class Exporter:
         # spec.neuralNetwork.preprocessing[0].featureName = '0'
 
         # Flexible input shapes
-        # from coremltools.weights.neural_network import flexible_shape_utils
+        # from coremltools.models.neural_network import flexible_shape_utils
         # s = [] # shapes
         # s.append(flexible_shape_utils.NeuralNetworkImageSize(320, 192))
         # s.append(flexible_shape_utils.NeuralNetworkImageSize(640, 384))  # (height, width)
@@ -1034,7 +1034,7 @@ class Exporter:
         nms.stringClassLabels.vector.extend(names.values())
         nms_model = ct.models.MLModel(nms_spec)
 
-        # 4. Pipeline weights together
+        # 4. Pipeline models together
         pipeline = ct.models.pipeline.Pipeline(
             input_features=[
                 ("image", ct.models.datatypes.Array(3, ny, nx)),

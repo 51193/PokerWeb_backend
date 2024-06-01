@@ -13,7 +13,7 @@ from ultralytics.hub.utils import HUB_WEB_ROOT
 
 class Model(nn.Module):
     """
-    A base class to unify APIs for all weights.
+    A base class to unify APIs for all models.
 
     Args:
         model (str, Path): Path to the model file to load or create.
@@ -122,7 +122,7 @@ class Model(nn.Module):
         """Check if the provided model is a HUB model."""
         return any(
             (
-                model.startswith(f"{HUB_WEB_ROOT}/weights/"),  # i.e. https://hub.ultralytics.com/models/MODEL_ID
+                model.startswith(f"{HUB_WEB_ROOT}/models/"),  # i.e. https://hub.ultralytics.com/models/MODEL_ID
                 [len(x) for x in model.split("_")] == [42, 20],  # APIKEY_MODELID
                 len(model) == 20 and not Path(model).exists() and all(x not in model for x in "./\\"),  # MODELID
             )
@@ -178,7 +178,7 @@ class Model(nn.Module):
         if not (pt_module or pt_str):
             raise TypeError(
                 f"model='{self.model}' should be a *.pt PyTorch model to run this method, but is a different format. "
-                f"PyTorch weights can train, val, predict and export, i.e. 'model.train(data=...)', but exported "
+                f"PyTorch models can train, val, predict and export, i.e. 'model.train(data=...)', but exported "
                 f"formats like ONNX, TensorRT etc. only support 'predict' and 'val' modes, "
                 f"i.e. 'yolo predict model=yolov8n.onnx'.\nTo run CUDA or MPS inference please pass the device "
                 f"argument directly in your inference command, i.e. 'model.predict(source=..., device=0)'"
@@ -261,7 +261,7 @@ class Model(nn.Module):
 
         custom = {"conf": 0.25, "save": is_cli}  # method defaults
         args = {**self.overrides, **custom, **kwargs, "mode": "predict"}  # highest priority args on the right
-        prompts = args.pop("prompts", None)  # for SAM-type weights
+        prompts = args.pop("prompts", None)  # for SAM-type models
 
         if not self.predictor:
             self.predictor = predictor or self._smart_load("predictor")(overrides=args, _callbacks=self.callbacks)
@@ -270,7 +270,7 @@ class Model(nn.Module):
             self.predictor.args = get_cfg(self.predictor.args, args)
             if "project" in args or "name" in args:
                 self.predictor.save_dir = get_save_dir(self.predictor.args)
-        if prompts and hasattr(self.predictor, "set_prompts"):  # for SAM-type weights
+        if prompts and hasattr(self.predictor, "set_prompts"):  # for SAM-type models
             self.predictor.set_prompts(prompts)
         return self.predictor.predict_cli(source=source) if is_cli else self.predictor(source=source, stream=stream)
 

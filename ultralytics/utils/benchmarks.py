@@ -141,20 +141,20 @@ def benchmark(
 
 class ProfileModels:
     """
-    ProfileModels class for profiling different weights on ONNX and TensorRT.
+    ProfileModels class for profiling different models on ONNX and TensorRT.
 
-    This class profiles the performance of different weights, provided their paths. The profiling includes parameters such as
+    This class profiles the performance of different models, provided their paths. The profiling includes parameters such as
     model speed and FLOPs.
 
     Attributes:
-        paths (list): Paths of the weights to profile.
+        paths (list): Paths of the models to profile.
         num_timed_runs (int): Number of timed runs for the profiling. Default is 100.
         num_warmup_runs (int): Number of warmup runs before profiling. Default is 10.
         min_time (float): Minimum number of seconds to profile for. Default is 60.
-        imgsz (int): Image size used in the weights. Default is 640.
+        imgsz (int): Image size used in the models. Default is 640.
 
     Methods:
-        profile(): Profiles the weights and prints the result.
+        profile(): Profiles the models and prints the result.
 
     Example:
         ```python
@@ -176,10 +176,10 @@ class ProfileModels:
         device=None,
     ):
         """
-        Initialize the ProfileModels class for profiling weights.
+        Initialize the ProfileModels class for profiling models.
 
         Args:
-            paths (list): List of paths of the weights to be profiled.
+            paths (list): List of paths of the models to be profiled.
             num_timed_runs (int, optional): Number of timed runs for the profiling. Default is 100.
             num_warmup_runs (int, optional): Number of warmup runs before the actual profiling starts. Default is 10.
             min_time (float, optional): Minimum time in seconds for profiling a model. Default is 60.
@@ -369,7 +369,7 @@ class ProfileModels:
         }
 
     def print_table(self, table_rows):
-        """Formats and prints a comparison table for different weights with given statistics and performance data."""
+        """Formats and prints a comparison table for different models with given statistics and performance data."""
         gpu = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "GPU"
         header = f"| Model | size<br><sup>(pixels) | mAP<sup>val<br>50-95 | Speed<br><sup>CPU ONNX<br>(ms) | Speed<br><sup>{gpu} TensorRT<br>(ms) | params<br><sup>(M) | FLOPs<br><sup>(B) |"
         separator = "|-------------|---------------------|--------------------|------------------------------|-----------------------------------|------------------|-----------------|"

@@ -100,7 +100,7 @@ class DETRLoss(nn.Module):
         loss[name_giou] = self.loss_gain["giou"] * loss[name_giou]
         return {k: v.squeeze() for k, v in loss.items()}
 
-    # This function is for future RT-DETR Segment weights
+    # This function is for future RT-DETR Segment models
     # def _get_loss_mask(self, masks, gt_mask, match_indices, postfix=''):
     #     # masks: [b, query, h, w], gt_mask: list[[n, H, W]]
     #     name_mask = f'loss_mask{postfix}'
@@ -121,7 +121,7 @@ class DETRLoss(nn.Module):
     #     loss[name_dice] = self.loss_gain['dice'] * self._dice_loss(src_masks, target_masks, num_gts)
     #     return loss
 
-    # This function is for future RT-DETR Segment weights
+    # This function is for future RT-DETR Segment models
     # @staticmethod
     # def _dice_loss(inputs, targets, num_gts):
     #     inputs = F.sigmoid(inputs).flatten(1)

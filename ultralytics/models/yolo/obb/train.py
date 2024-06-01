@@ -13,7 +13,7 @@ class OBBTrainer(yolo.detect.DetectionTrainer):
 
     Example:
         ```python
-        from ultralytics.weights.yolo.obb import OBBTrainer
+        from ultralytics.models.yolo.obb import OBBTrainer
 
         args = dict(model='yolov8n-seg.pt', data='coco8-seg.yaml', epochs=3)
         trainer = OBBTrainer(overrides=args)
