@@ -420,12 +420,15 @@ def handle_connect():
 def handle_disconnect():
     sid = request.sid
     if sid in realtimeQueues:
-        realtimeQueues[sid].put(None)  # 发送停止信号
+        realtimeQueues[sid].put(None)
         processingThreads[sid].join()
+
         with locks[sid]:
             del realtimeQueues[sid]
             del processingThreads[sid]
             del conditions[sid]
+            if sid in sample_rates:  # 清理该sid的sample_rates记录
+                del sample_rates[sid]
     print('Client disconnected')
 
 
@@ -437,36 +440,60 @@ processingThreads = {}
 conditions = {}
 locks = {}
 
+# 初始化每个sid的处理时间跟踪和上次调整时间
+processTimes = {}
+lastAdjustmentTimes = {}
+sample_rates = {}  # 线程局部存储的批处理数量
+target_process_time = 0.5  # 目标处理时间为0.5秒
+
+
+def adjust_sampling_rate(sid, process_time):
+    min_samples, max_samples = 1, 10
+    cooldown = 10  # 10 seconds cooldown
+
+    current_time = time.time()
+
+    if sid not in lastAdjustmentTimes or current_time - lastAdjustmentTimes[sid] > cooldown:
+        if process_time > target_process_time and sample_rates[sid] > min_samples:  # 如果处理时间大于目标处理时间
+            sample_rates[sid] -= 1
+        elif process_time < target_process_time and sample_rates[sid] < max_samples:  # 如果处理时间小于目标处理时间
+            sample_rates[sid] += 1
+
+        lastAdjustmentTimes[sid] = current_time
+        processTimes[sid] = process_time
+        print(f'Adjusted number of samples to {sample_rates[sid]} for sid {sid}')
+
 
 def process_images(sid):
     while True:
         with conditions[sid]:
-            conditions[sid].wait_for(lambda: not realtimeQueues[sid].empty())  # 等待条件变量通知
+            conditions[sid].wait_for(lambda: not realtimeQueues[sid].empty())
+            start_time = time.time()
+
             try:
                 queue_size = realtimeQueues[sid].qsize()
-
                 if queue_size == 0:
                     continue
 
-                # 确定抽取的索引
-                num_samples = 4
-                if queue_size >= num_samples:
-                    indexes = [int(queue_size * i / num_samples) for i in range(1, num_samples)]
+                num_samples = sample_rates.get(sid, 4)  # 使用该sid的局部num_samples值
+
+                if num_samples != 1:
+                    if queue_size >= num_samples:
+                        indexes = [int(queue_size * i / num_samples) for i in range(1, num_samples)]
+                    else:
+                        indexes = list(range(queue_size))
                 else:
-                    indexes = list(range(queue_size))
+                    indexes = [queue_size - 1]
 
                 selected_messages = []
 
-                # 抽取特定消息
                 for i in range(queue_size):
                     message = realtimeQueues[sid].get_nowait()
                     if message is None:
-                        # 清空队列，处理停止信号
                         break
                     if i in indexes:
                         selected_messages.append(message)
 
-                # 处理并发送消息
                 for message in selected_messages:
                     if message is None:
                         break
@@ -474,11 +501,15 @@ def process_images(sid):
                     arr = np.frombuffer(message, dtype=np.uint8)
                     image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                     if image is not None:
-                        image = frame_process(image)  # 假设frame_process是定义的处理函数
+                        image = frame_process(image)
                         _, buffer = cv2.imencode('.jpg', image)
                         socketio.emit('processed', buffer.tobytes(), room=sid)
                     else:
                         print("Failed to decode image")
+
+                end_time = time.time()
+                process_time = end_time - start_time
+                adjust_sampling_rate(sid, process_time)
 
             except Empty:
                 continue
@@ -488,16 +519,18 @@ def process_images(sid):
 def handle_image(message):
     sid = request.sid
     if sid not in realtimeQueues:
-        # 创建新的线程、队列和条件变量
         locks[sid] = threading.Lock()
-        conditions[sid] = threading.Condition(lock=locks[sid])  # 明确指定条件变量使用的锁
+        conditions[sid] = threading.Condition(lock=locks[sid])
         realtimeQueues[sid] = queue.Queue()
+        sample_rates[sid] = 4  # 每个sid初始批处理数量
         processingThreads[sid] = threading.Thread(target=process_images, args=(sid,))
         processingThreads[sid].start()
+        processTimes[sid] = 0  # 初始化处理时间
+        lastAdjustmentTimes[sid] = time.time()  # 初始化调整时间
 
-    with conditions[sid]:  # 使用条件变量的锁来同步操作
+    with conditions[sid]:
         realtimeQueues[sid].put(message)
-        conditions[sid].notify()  # 在持有锁的情况下通知
+        conditions[sid].notify()
 
 
 if __name__ == '__main__':
