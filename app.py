@@ -45,13 +45,17 @@ try:
 except pymysql.Error as e:
     print("数据库连接失败:", e)
 
-model = YOLOv8Detector()  # 创建YOLOv8Detector对象
-model.load_model(abs_path("weights/best-yolov8n.pt", path_type="current"))  # 加载预训练的YOLOv8模型
+model_poker = YOLOv8Detector()
+model_poker.load_model(abs_path("weights/poker.pt", path_type="current"))  # 加载预训练的YOLOv8模型
+model_poker.change_name("poker")
+model_sgs = YOLOv8Detector()
+model_sgs.load_model(abs_path("weights/sgs.pt", path_type="current"))  # 加载预训练的YOLOv8模型
+model_sgs.change_name("sgs")
+
+colors = get_cls_color(model_poker.names)
 
 
-colors = get_cls_color(model.names)
-
-def frame_process(image):  # 定义帧处理函数，用于处理每一帧图像
+def frame_process(image, model):  # 定义帧处理函数，用于处理每一帧图像
     pre_img = model.preprocess(image)  # 对图像进行预处理
     pred = model.predict(pre_img)  # 使用模型进行预测
     det = pred[0]  # 获取预测结果
@@ -106,15 +110,15 @@ def get_username_from_token():
     return username, None, None
 
 
-@app.route('/change-model', methods=['POST'])
-def change_model():
-    name = request.json.get('name')
-    if name in Game_List:
-        model.load_model(abs_path(f"weights/{name}.pt", path_type="current"))
-        model.change_name(name)
-        return jsonify({'message': '模型切换成功'})
-    else:
-        return jsonify({'error': '目标不存在'})
+# @app.route('/change-model', methods=['POST'])
+# def change_model():
+#     name = request.json.get('name')
+#     if name in Game_List:
+#         model.load_model(abs_path(f"weights/{name}.pt", path_type="current"))
+#         model.change_name(name)
+#         return jsonify({'message': '模型切换成功'})
+#     else:
+#         return jsonify({'error': '目标不存在'})
 
 
 @app.route('/user/login', methods=['POST'])
@@ -309,6 +313,18 @@ def detect_video():
         return 'No selected file', 400
 
     temp_dir = 'temp'
+    # 从请求体中获取game字段
+    game = request.form.get('game', None)
+    if not game:
+        return jsonify({"error": "No game field provided"}), 400
+
+    # 根据game字段选择模型
+    if game == "sgs":
+        model = model_sgs
+    elif game == "poker":
+        model = model_poker
+    else:
+        model = model_poker
     # 创建临时文件来保存上传的视频和输出视频
     input_temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4', dir=temp_dir)
     output_temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4', dir=temp_dir)
@@ -326,7 +342,7 @@ def detect_video():
         ret, frame = cap.read()
         if not ret:
             break
-        processed_frame = frame_process(frame)
+        processed_frame = frame_process(frame, model)
         out.write(processed_frame)
     cap.release()
     out.release()
@@ -343,13 +359,19 @@ def detect_cam():
     data = request.get_json()
     if data is None or 'image' not in data:
         return jsonify({"error": "Invalid request, no image provided"}), 400
-
+    game = data['game']
     image_data = data['image']
+    if game == "sgs":
+        model = model_sgs
+    elif game == "poker":
+        model = model_poker
+    else:
+        return 'No file part', 400
     # 解码Base64图像数据
     header, encoded = image_data.split(",", 1)
     image_decoded = base64.b64decode(encoded)
     image = cv2.imdecode(np.frombuffer(image_decoded, np.uint8), cv2.IMREAD_COLOR)
-    image = frame_process(image)
+    image = frame_process(image, model)
 
     # 将处理后的图像转换回Base64以发送回客户端
     _, buffer = cv2.imencode('.jpg', image)
@@ -359,54 +381,37 @@ def detect_cam():
     return jsonify({"processedImage": f"data:image/jpeg;base64,{img_base64}"})
 
 
-@app.route('/detectCam1', methods=['POST'])
-def detect_cam1():
-    # 从请求体中获取图像的Base64编码
-    data = request.get_json()
-    if data is None or 'image' not in data:
-        return jsonify({"error": "Invalid request, no image provided"}), 400
-
-    image_data = data['image']
-    # 解码Base64图像数据
-    header, encoded = image_data.split(",", 1)
-    image_decoded = base64.b64decode(encoded)
-    image = cv2.imdecode(np.frombuffer(image_decoded, np.uint8), cv2.IMREAD_COLOR)
-    pre_img = model.preprocess(image)  # 对图像进行预处理
-    pred = model.predict(pre_img)  # 使用模型进行预测
-    det = pred[0]  # 获取预测结果
-    card = []
-    # 如果有检测信息则进入
-    if det is not None and len(det):
-        det_info = model.postprocess(pred)  # 对预测结果进行后处理
-        for info in det_info:  # 遍历检测信息
-            name, bbox, conf, cls_id = info['class_name'], info['bbox'], info['score'], info[
-                'class_id']  # 获取类别名称、边界框、置信度和类别ID
-            if conf > 0.8:
-                card.append(name)
-    # 返回处理后的图像数据
-    return card
+clients = {}
 
 
 # 返回字符串
 @socketio.on('image1')
 def handle_image(message):
-    if isinstance(message, bytes):  # 检查消息是否为二进制
-        # 将二进制数据转换为图像
-        arr = np.frombuffer(message, np.uint8)
-        image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-        pre_img = model.preprocess(image)  # 对图像进行预处理
-        pred = model.predict(pre_img)  # 使用模型进行预测
-        det = pred[0]  # 获取预测结果
-        card = []
-        # 如果有检测信息则进入
-        if det is not None and len(det):
-            det_info = model.postprocess(pred)  # 对预测结果进行后处理
-            for info in det_info:  # 遍历检测信息
-                name, bbox, conf, cls_id = info['class_name'], info['bbox'], info['score'], info[
-                    'class_id']  # 获取类别名称、边界框、置信度和类别ID
-                if conf > 0.8:
-                    card.append(name)
-        socketio.emit('processed', card)
+    if 'game' in message:
+        game = message['game']
+        if game == "sgs":
+            model = model_sgs
+        else:
+            model = model_poker
+    if 'image' in message:
+        image_data = message['image']
+        if isinstance(image_data, bytes):  # 检查消息是否为二进制
+            # 将二进制数据转换为图像
+            arr = np.frombuffer(image_data, np.uint8)
+            image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            pre_img = model.preprocess(image)  # 对图像进行预处理
+            pred = model.predict(pre_img)  # 使用模型进行预测
+            det = pred[0]  # 获取预测结果
+            card = []
+            # 如果有检测信息则进入
+            if det is not None and len(det):
+                det_info = model.postprocess(pred)  # 对预测结果进行后处理
+                for info in det_info:  # 遍历检测信息
+                    name, bbox, conf, cls_id = info['class_name'], info['bbox'], info['score'], info[
+                        'class_id']  # 获取类别名称、边界框、置信度和类别ID
+                    if conf > 0.8:
+                        card.append(name)
+            socketio.emit('processed', card)
 
 
 @socketio.on('connect')
@@ -495,16 +500,25 @@ def process_images(sid):
 
         # 图像处理不需要锁保护
         for message in selected_messages:
-            if message is None:
-                break
-            arr = np.frombuffer(message, dtype=np.uint8)
-            image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-            if image is not None:
-                image = frame_process(image)
-                _, buffer = cv2.imencode('.jpg', image)
-                socketio.emit('processed', buffer.tobytes(), room=sid)
-            else:
-                print("Failed to decode image")
+            if 'game' in message:
+                game = message['game']
+                if game == "sgs":
+                    model = model_sgs
+                else:
+                    model = model_poker
+            if 'image' in message:
+                image_data = message['image']
+                if isinstance(image_data, bytes):  # 检查消息是否为二进制
+                    if message is None:
+                        break
+                    arr = np.frombuffer(image_data, dtype=np.uint8)
+                    image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                    if image is not None:
+                        image = frame_process(image, model)
+                        _, buffer = cv2.imencode('.jpg', image)
+                        socketio.emit('processed', buffer.tobytes(), room=sid)
+                    else:
+                        print("Failed to decode image")
 
         end_time = time.time()
         process_time = end_time - start_time
