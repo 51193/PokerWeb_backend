@@ -4,6 +4,8 @@ import tempfile
 import threading
 import queue
 import time
+
+import qianfan
 from flask import Flask, jsonify, send_file, request
 from flask_cors import CORS
 from QtFusion.config import QF_Config
@@ -16,6 +18,13 @@ import numpy as np
 import pymysql
 import jwt
 from datetime import datetime, timedelta
+
+os.environ["QIANFAN_ACCESS_KEY"] = "c18f479198604519850e14fa6dcc344e"
+os.environ["QIANFAN_SECRET_KEY"] = "2f9077691e164bf7baac7977c9ffe390"
+# 应用API Key
+os.environ["QIANFAN_AK"] = "bXJ5KOsmLEzXqueurjS44dmS"
+# 应用Secret Key
+os.environ["QIANFAN_SK"] = "cKbkDvNWpTcTmD3Ad9IU6l1uNEWEHugU"
 
 app = Flask(__name__)
 CORS(app)
@@ -76,6 +85,26 @@ def frame_process(image, model):  # 定义帧处理函数，用于处理每一�
 @app.route('/')
 def hello_world():
     return 'Hello, World!'
+
+
+@app.route('/ai', methods=['POST'])
+def ai():
+    # 假设qianfan.ChatCompletion()是有效的，并且do()方法按预期工作
+    chat_comp = qianfan.ChatCompletion()
+    # 从POST请求中获取用户输入（这里假设是JSON格式，并且包含'content'字段）
+    user_input = request.json.get('content', '你好')  # 如果没有提供'content'，则默认为'你好'
+    # 调用模型并处理消息
+    resp = chat_comp.do(model="ERNIE-Lite-8K-0308", messages=[{
+        "role": "user",
+        "content": user_input
+    }])
+    # 假设resp是一个字典，并且包含'body'键
+    if 'body' in resp:
+        # 使用jsonify返回响应
+        return jsonify(response=resp["body"]["result"])
+    else:
+        # 如果resp不包含'body'，返回一个错误消息
+        return jsonify(error="Response from model did not contain 'body' key"), 400
 
 
 def create_token(username):
